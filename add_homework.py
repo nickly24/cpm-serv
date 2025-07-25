@@ -38,7 +38,7 @@ def create_homework_and_sessions(homework_name, homework_type, deadline_str):
             VALUES (%s, %s, %s, %s)
         """
         for (student_id,) in students:
-            cursor.execute(insert_session_query, (0, 100, homework_id, student_id))
+            cursor.execute(insert_session_query, (0, 0, homework_id, student_id))
         connection.commit()
 
         print(f"Созданы сессии для всех студентов.")

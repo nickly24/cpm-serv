@@ -1,5 +1,6 @@
 import mysql.connector
 from db import db
+
 def get_homeworks():
     connection = mysql.connector.connect(
         host=db.host,
@@ -11,7 +12,7 @@ def get_homeworks():
     cursor = connection.cursor(dictionary=True)
 
     try:
-        query = "SELECT id, name, type, deadline FROM homework"
+        query = "SELECT id, name, type, deadline FROM homework ORDER BY deadline DESC"
         cursor.execute(query)
         results = cursor.fetchall()
 
@@ -35,4 +36,3 @@ def get_homeworks():
 
     finally:
         connection.close()
-

@@ -91,4 +91,3 @@ def get_all_exams():
         cursor.close()
         connection.close()
 
-print(get_all_exams())

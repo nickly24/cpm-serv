@@ -23,18 +23,11 @@ from get_users_by_role import get_users_by_role
 from delete_user import delete_user
 from get_sessions import get_all_exams
 from get_students import get_all_students
-app = Flask(__name__)
-from flask import Flask
-from flask_cors import CORS
+from db_connect import get_db_connection
+import mysql.connector
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+CORS(app)
 
 @app.route("/")
 def hello_world():
@@ -237,8 +230,445 @@ def get_exams():
     return jsonify(answer)
 
 
+
+
+
+
+
+
+#Platon part
+#добавляет в изученные 
+# пример 
+
+# {
+#     "student_id": 123,
+#     "question_id": 456
+# }
+
+@app.route('/add-learned-question', methods=['POST'])
+def add_learned_question():
+    connection = None
+    cursor = None
+    try:
+        data = request.get_json()
+        student_id = data.get('student_id')
+        question_id = data.get('question_id')
+        
+        if not student_id or not question_id:
+            return jsonify({
+                "success": False,
+                "error": "Both student_id and question_id are required"
+            }), 400
+
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # 1. Сначала получаем theme_id для данного вопроса
+        get_theme_query = "SELECT theme_id FROM cards WHERE id = %s"
+        cursor.execute(get_theme_query, (question_id,))
+        question_data = cursor.fetchone()
+        
+        if not question_data:
+            return jsonify({
+                "success": False,
+                "error": "Question not found",
+                "question_id": question_id
+            }), 404
+
+        theme_id = question_data['theme_id']
+
+        # 2. Проверяем, не существует ли уже такая запись
+        check_query = """
+        SELECT 1 FROM student_progress 
+        WHERE student_id = %s AND question_id = %s
+        """
+        cursor.execute(check_query, (student_id, question_id))
+        
+        if cursor.fetchone():
+            return jsonify({
+                "success": False,
+                "message": "Record already exists",
+                "student_id": student_id,
+                "question_id": question_id
+            }), 409
+
+        # 3. Добавляем новую запись с theme_id
+        insert_query = """
+        INSERT INTO student_progress 
+        (student_id, question_id, theme_id) 
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(insert_query, (student_id, question_id, theme_id))
+        connection.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Record added successfully",
+            "student_id": student_id,
+            "question_id": question_id,
+            "theme_id": theme_id
+        }), 201
+
+    except mysql.connector.Error as e:
+        if connection:
+            connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "student_id": student_id,
+            "question_id": question_id
+        }), 500
+
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+#возвращает вообще все вопросы по теме и помечает те что уде изучены булиевой переменной - "is_learned": (true/false),
+@app.route('/all-cards-by-theme/<int:student_id>/<int:theme_id>', methods=['GET'])
+def get_cards_by_theme_with_progress(student_id, theme_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Получаем все карточки темы
+        cards_query = "SELECT * FROM cards WHERE theme_id = %s"
+        cursor.execute(cards_query, (theme_id,))
+        all_cards = cursor.fetchall()
+
+        # Получаем изученные карточки студента
+        learned_query = """
+        SELECT question_id 
+        FROM student_progress 
+        WHERE student_id = %s AND theme_id = %s
+        """
+        cursor.execute(learned_query, (student_id, theme_id))
+        learned_card_ids = {row['question_id'] for row in cursor.fetchall()}
+
+        # Добавляем флаг is_learned к каждой карточке
+        for card in all_cards:
+            card['is_learned'] = card['id'] in learned_card_ids
+
+        cursor.close()
+        connection.close()
+
+        return jsonify({
+            "success": True,
+            "student_id": student_id,
+            "theme_id": theme_id,
+            "cards": all_cards,
+            "total_cards": len(all_cards),
+            "learned_cards": len(learned_card_ids),
+            "remaining_cards": len(all_cards) - len(learned_card_ids)
+        })
+
+    except mysql.connector.Error as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "student_id": student_id,
+            "theme_id": theme_id
+        }), 500
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": str(e)
+        }), 500
+
+
+#возвращает все карточки который пользователь еще не изучил
+@app.route('/cadrs-by-theme/<int:student_id>/<int:theme_id>', methods=['GET'])
+def get_cards_to_learn(student_id, theme_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Запрос для получения карточек, которые студент еще не изучил
+        query = """
+        SELECT c.* 
+        FROM cards c
+        WHERE c.theme_id = %s
+        AND NOT EXISTS (
+            SELECT 1 
+            FROM student_progress sp
+            WHERE sp.student_id = %s 
+            AND sp.question_id = c.id
+        )
+        """
+        cursor.execute(query, (theme_id, student_id))
+        
+        cards_to_learn = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+
+        return jsonify({
+            "success": True,
+            "student_id": student_id,
+            "theme_id": theme_id,
+            "cards_to_learn": cards_to_learn,
+            "count": len(cards_to_learn)
+        })
+
+    except mysql.connector.Error as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "student_id": student_id,
+            "theme_id": theme_id
+        }), 500
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": str(e)
+        }), 500
+    
+
+#можно добавлять неограниченное колличество карточек на тему, если темы не существует то создает эту тему и под новый id добавляет вопросы
+#пример
+# {
+#     "name": "Название темы",
+#     "questions": [
+#         {
+#             "question": "Текст вопроса 1",
+#             "answer": "Ответ на вопрос 1"
+#         },
+#     ]
+# }
+
+@app.route('/create-theme-with-questions', methods=['POST'])
+def create_theme_with_questions():
+    connection = None
+    cursor = None
+    try:
+        data = request.get_json()
+        
+        # Получаем данные темы
+        theme_name = data.get('name')
+        questions = data.get('questions', [])  # Список вопросов
+        
+        if not theme_name:
+            return jsonify({
+                "success": False,
+                "error": "Theme name is required"
+            }), 400
+
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # 1. Проверяем существование темы
+        cursor.execute("SELECT id FROM card_themes WHERE name = %s", (theme_name,))
+        existing_theme = cursor.fetchone()
+
+        if existing_theme:
+            theme_id = existing_theme['id']
+            message = "Theme already exists"
+        else:
+            # 2. Создаем новую тему
+            cursor.execute(
+                "INSERT INTO card_themes (name) VALUES (%s)", 
+                (theme_name,)
+            )
+            theme_id = cursor.lastrowid
+            message = "Theme created successfully"
+            connection.commit()
+
+        # 3. Добавляем вопросы к теме
+        added_questions = []
+        for question_data in questions:
+            question = question_data.get('question')
+            answer = question_data.get('answer')
+            
+            if not question or not answer:
+                continue  # Пропускаем неполные вопросы
+
+            cursor.execute(
+                """INSERT INTO cards 
+                (question, answer, theme_id) 
+                VALUES (%s, %s, %s)""",
+                (question, answer, theme_id)
+            )
+            added_questions.append({
+                "question": question,
+                "answer": answer,
+                "id": cursor.lastrowid
+            })
+
+        connection.commit()
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "theme_id": theme_id,
+            "theme_name": theme_name,
+            "added_questions": added_questions,
+            "questions_count": len(added_questions)
+        })
+
+    except mysql.connector.Error as e:
+        if connection:
+            connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": str(e)
+        }), 500
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+#возвращает все темы
+@app.route('/get-themes', methods=['GET'])
+def get_all_themes():
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True, buffered=True)
+        cursor.execute("SELECT * FROM card_themes")
+        themes = cursor.fetchall() 
+        cursor.close()
+        connection.close()
+        
+        # Возвращаем результат в формате JSON
+        return jsonify(themes)
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+    
+
+#возвращает выученные вопросы по конкретной теме
+@app.route('/learned-questions/<int:student_id>/<int:theme_id>', methods=['GET'])
+def get_learned_questions(student_id, theme_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        
+        query = """
+        SELECT c.* 
+        FROM cards c
+        JOIN student_progress sp ON c.id = sp.question_id
+        WHERE sp.student_id = %s 
+          AND c.theme_id = %s
+        """
+        cursor.execute(query, (student_id, theme_id))
+        
+        learned_questions = cursor.fetchall()
+        
+        cursor.close()
+        connection.close()
+
+        return jsonify({
+            "success": True,
+            "student_id": student_id,
+            "theme_id": theme_id,
+            "learned_questions": learned_questions,
+            "count": len(learned_questions)
+        })
+
+    except mysql.connector.Error as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "student_id": student_id,
+            "theme_id": theme_id
+        }), 500
+
+
+#убирает из изученных карточку
+@app.route('/remove-learned-question/<int:student_id>/<int:question_id>', methods=['DELETE'])
+def remove_learned_question(student_id, question_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Проверяем существование записи перед удалением
+        check_query = """
+        SELECT 1 FROM student_progress 
+        WHERE student_id = %s AND question_id = %s
+        """
+        cursor.execute(check_query, (student_id, question_id))
+        
+        if not cursor.fetchone():
+            cursor.close()
+            connection.close()
+            return jsonify({
+                "success": False,
+                "message": "Record not found",
+                "student_id": student_id,
+                "question_id": question_id
+            }), 404
+
+        # Удаляем запись
+        delete_query = """
+        DELETE FROM student_progress 
+        WHERE student_id = %s AND question_id = %s
+        """
+        cursor.execute(delete_query, (student_id, question_id))
+        connection.commit()
+        
+        affected_rows = cursor.rowcount
+        
+        cursor.close()
+        connection.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully",
+            "student_id": student_id,
+            "question_id": question_id,
+            "affected_rows": affected_rows
+        })
+
+    except mysql.connector.Error as e:
+        connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "student_id": student_id,
+            "question_id": question_id
+        }), 500
+
+    except Exception as e:
+        connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "details": str(e)
+        }), 500
+
+
+
 if __name__ == "__main__":
-    app.run(host='0.0.0.0',port=80)
+    app.run(host='0.0.0.0',port=80,debug=True)
 
 
 

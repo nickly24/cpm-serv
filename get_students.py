@@ -33,5 +33,3 @@ def get_all_students():
 
     finally:
         connection.close()
-
-print(get_all_students())

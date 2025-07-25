@@ -29,7 +29,7 @@ import mysql.connector
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {  # Обратите внимание на "/*" вместо "/api/*"
-        "origins": ["http://localhost:3000"],  # Только ваш фронтенд
+        "origins": "*",  # Только ваш фронтенд
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True

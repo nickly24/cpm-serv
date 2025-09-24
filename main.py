@@ -231,12 +231,6 @@ def get_us():
     return jsonify(answer)
 
 
-@app.route("/api/get-exams")
-def get_exams():
-    answer = get_all_exams()
-    return jsonify(answer)
-
-
 
 
 

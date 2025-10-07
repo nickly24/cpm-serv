@@ -25,6 +25,8 @@ from get_sessions import get_all_exams
 from get_students import get_all_students
 from db_connect import get_db_connection
 import mysql.connector
+from edit_homework_session import edit_homework_session
+from add_student import add_student
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -113,6 +115,21 @@ def ghst():
     student_id = data.get('studentId') 
     answer = get_student_homework_dashboard(student_id)
     return jsonify(answer)
+
+@app.route("/api/edit-homework-session", methods=['POST'])
+def edit_hw_session():
+    data = request.get_json()
+    session_id = data.get('sessionId')
+    result = data.get('result')
+    date_pass = data.get('datePass')
+    status = data.get('status')
+
+    if not session_id:
+        return jsonify({'error': 'Поле "sessionId" обязательно'}), 400
+
+    answer = edit_homework_session(session_id=session_id, result=result, date_pass=date_pass, status=status)
+    http_code = 200 if answer.get('status') else 400
+    return jsonify(answer), http_code
 
 @app.route("/api/create-homework",methods = ['POST'])
 def create_hw():
@@ -229,6 +246,53 @@ def del_us():
 def get_us():
     answer = get_all_students()
     return jsonify(answer)
+
+
+@app.route("/api/add-student", methods=['POST'])
+def add_student_route():
+    """
+    Добавляет нового студента с автоматической генерацией логина и пароля
+    
+    Ожидаемые данные в JSON:
+    {
+        "full_name": "Имя Фамилия",
+        "class": 9  // или 10, или 11
+    }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({
+            "status": False,
+            "error": "Данные не предоставлены"
+        }), 400
+    
+    full_name = data.get('full_name')
+    class_number = data.get('class')
+    
+    if not full_name:
+        return jsonify({
+            "status": False,
+            "error": "Поле 'full_name' обязательно"
+        }), 400
+    
+    if not class_number:
+        return jsonify({
+            "status": False,
+            "error": "Поле 'class' обязательно"
+        }), 400
+    
+    try:
+        class_number = int(class_number)
+    except (ValueError, TypeError):
+        return jsonify({
+            "status": False,
+            "error": "Поле 'class' должно быть числом"
+        }), 400
+    
+    answer = add_student(full_name, class_number)
+    http_code = 200 if answer.get('status') else 400
+    return jsonify(answer), http_code
 
 
 

@@ -12,7 +12,7 @@ def get_all_students():
     cursor = connection.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT id, full_name, group_id, class FROM students ORDER BY full_name ASC")
+        cursor.execute("SELECT id, full_name, group_id, class, tg_name FROM students ORDER BY full_name ASC")
         students = cursor.fetchall()
 
         result = [
@@ -21,6 +21,7 @@ def get_all_students():
                 "full_name": student["full_name"],
                 "group_id": student["group_id"],
                 "class": student["class"],
+                "tg_name": student["tg_name"]
             }
             for student in students
         ]

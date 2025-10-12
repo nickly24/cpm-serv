@@ -27,6 +27,8 @@ from db_connect import get_db_connection
 import mysql.connector
 from edit_homework_session import edit_homework_session
 from add_student import add_student
+from edit_student import edit_student
+from validate_student_by_tg import validate_student_by_tg_name
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -256,7 +258,8 @@ def add_student_route():
     Ожидаемые данные в JSON:
     {
         "full_name": "Имя Фамилия",
-        "class": 9  // или 10, или 11
+        "class": 9,  // или 10, или 11
+        "tg_name": "@username"  // необязательно
     }
     """
     data = request.get_json()
@@ -269,6 +272,7 @@ def add_student_route():
     
     full_name = data.get('full_name')
     class_number = data.get('class')
+    tg_name = data.get('tg_name')
     
     if not full_name:
         return jsonify({
@@ -290,8 +294,109 @@ def add_student_route():
             "error": "Поле 'class' должно быть числом"
         }), 400
     
-    answer = add_student(full_name, class_number)
+    answer = add_student(full_name, class_number, tg_name)
     http_code = 200 if answer.get('status') else 400
+    return jsonify(answer), http_code
+
+
+@app.route("/api/edit-student", methods=['PUT'])
+def edit_student_route():
+    """
+    Редактирует данные студента
+    
+    Ожидаемые данные в JSON:
+    {
+        "student_id": 123,  // обязательно
+        "full_name": "Новое Имя",  // необязательно
+        "class": 10,  // необязательно
+        "group_id": 5,  // необязательно
+        "tg_name": "@new_username"  // необязательно
+    }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({
+            "status": False,
+            "error": "Данные не предоставлены"
+        }), 400
+    
+    student_id = data.get('student_id')
+    
+    if not student_id:
+        return jsonify({
+            "status": False,
+            "error": "Поле 'student_id' обязательно"
+        }), 400
+    
+    full_name = data.get('full_name')
+    class_number = data.get('class')
+    group_id = data.get('group_id')
+    tg_name = data.get('tg_name')
+    
+    # Проверяем, что хотя бы одно поле для обновления передано
+    if all(field is None for field in [full_name, class_number, group_id, tg_name]):
+        return jsonify({
+            "status": False,
+            "error": "Необходимо указать хотя бы одно поле для обновления"
+        }), 400
+    
+    # Валидация класса, если передан
+    if class_number is not None:
+        try:
+            class_number = int(class_number)
+        except (ValueError, TypeError):
+            return jsonify({
+                "status": False,
+                "error": "Поле 'class' должно быть числом"
+            }), 400
+    
+    answer = edit_student(student_id, full_name, class_number, group_id, tg_name)
+    http_code = 200 if answer.get('status') else 400
+    return jsonify(answer), http_code
+
+
+@app.route("/api/validate-student-by-tg", methods=['POST'])
+def validate_student_by_tg_route():
+    """
+    Проверяет существование студента по Telegram никнейму
+    
+    Ожидаемые данные в JSON:
+    {
+        "tg_name": "@username"
+    }
+    
+    Возвращает:
+    {
+        "status": true/false,
+        "message": "...",
+        "student_data": {
+            "student_id": 123,
+            "full_name": "Имя Фамилия",
+            "class": 10,
+            "group_id": 5,
+            "tg_name": "@username"
+        }
+    }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({
+            "status": False,
+            "error": "Данные не предоставлены"
+        }), 400
+    
+    tg_name = data.get('tg_name')
+    
+    if not tg_name:
+        return jsonify({
+            "status": False,
+            "error": "Поле 'tg_name' обязательно"
+        }), 400
+    
+    answer = validate_student_by_tg_name(tg_name)
+    http_code = 200 if answer.get('status') else 404
     return jsonify(answer), http_code
 
 

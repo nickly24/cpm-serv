@@ -3,13 +3,14 @@ from db import db
 import random
 import string
 
-def add_student(full_name, class_number):
+def add_student(full_name, class_number, tg_name=None):
     """
     Добавляет нового студента с автоматической генерацией логина и пароля
     
     Args:
         full_name (str): Полное имя студента
         class_number (int): Класс студента (9, 10 или 11)
+        tg_name (str, optional): Telegram никнейм студента
     
     Returns:
         dict: Результат операции с данными студента
@@ -65,10 +66,10 @@ def add_student(full_name, class_number):
         
         # 1. Добавляем студента в таблицу students
         insert_student_query = """
-        INSERT INTO students (full_name, class, group_id) 
-        VALUES (%s, %s, NULL)
+        INSERT INTO students (full_name, class, group_id, tg_name) 
+        VALUES (%s, %s, NULL, %s)
         """
-        cursor.execute(insert_student_query, (full_name, class_number))
+        cursor.execute(insert_student_query, (full_name, class_number, tg_name))
         student_id = cursor.lastrowid
         
         # 2. Добавляем запись в auth_users
@@ -90,7 +91,8 @@ def add_student(full_name, class_number):
                 "class": class_number,
                 "login": login,
                 "password": password,
-                "group_id": None
+                "group_id": None,
+                "tg_name": tg_name
             }
         }
         

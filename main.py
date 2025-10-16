@@ -29,6 +29,7 @@ from edit_homework_session import edit_homework_session
 from add_student import add_student
 from edit_student import edit_student
 from validate_student_by_tg import validate_student_by_tg_name
+from schedule_manager import ScheduleManager
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -835,6 +836,167 @@ def remove_learned_question(student_id, question_id):
             "details": str(e)
         }), 500
 
+
+# ============================================================================
+# РОУТЫ ДЛЯ РАСПИСАНИЯ ЗАНЯТИЙ
+# ============================================================================
+
+@app.route("/api/schedule", methods=['GET'])
+def get_schedule():
+    """
+    Получить все занятия из расписания
+    
+    Возвращает:
+    {
+        "status": true/false,
+        "message": "...",
+        "schedule": [
+            {
+                "_id": "ObjectId",
+                "day_of_week": "Понедельник",
+                "start_time": "09:00",
+                "end_time": "10:30",
+                "lesson_name": "Математика",
+                "teacher_name": "Иванов И.И.",
+                "location": "Аудитория 101",
+                "created_at": "datetime",
+                "updated_at": "datetime"
+            }
+        ]
+    }
+    """
+    try:
+        schedule_manager = ScheduleManager()
+        result = schedule_manager.get_all_schedule()
+        schedule_manager.close_connection()
+        
+        http_code = 200 if result.get('status') else 500
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/schedule", methods=['POST'])
+def add_lesson():
+    """
+    Добавить новое занятие в расписание
+    
+    Ожидаемые данные в JSON:
+    {
+        "day_of_week": "Понедельник",  // Понедельник, Вторник, Среда, Четверг, Пятница, Суббота, Воскресенье
+        "start_time": "09:00",         // формат HH:MM
+        "end_time": "10:30",           // формат HH:MM
+        "lesson_name": "Математика",
+        "teacher_name": "Иванов И.И.",
+        "location": "Аудитория 101"
+    }
+    
+    Возвращает:
+    {
+        "status": true/false,
+        "message": "...",
+        "lesson_id": "ObjectId"  // только при успехе
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": False,
+                "error": "Данные не предоставлены"
+            }), 400
+        
+        schedule_manager = ScheduleManager()
+        result = schedule_manager.add_lesson(data)
+        schedule_manager.close_connection()
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/schedule/<lesson_id>", methods=['PUT'])
+def edit_lesson(lesson_id):
+    """
+    Редактировать занятие в расписании
+    
+    URL параметр: lesson_id - ID занятия в MongoDB
+    
+    Ожидаемые данные в JSON:
+    {
+        "day_of_week": "Понедельник",
+        "start_time": "09:00",
+        "end_time": "10:30",
+        "lesson_name": "Математика",
+        "teacher_name": "Иванов И.И.",
+        "location": "Аудитория 101"
+    }
+    
+    Возвращает:
+    {
+        "status": true/false,
+        "message": "..."
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": False,
+                "error": "Данные не предоставлены"
+            }), 400
+        
+        schedule_manager = ScheduleManager()
+        result = schedule_manager.edit_lesson(lesson_id, data)
+        schedule_manager.close_connection()
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/schedule/<lesson_id>", methods=['DELETE'])
+def delete_lesson(lesson_id):
+    """
+    Удалить занятие из расписания
+    
+    URL параметр: lesson_id - ID занятия в MongoDB
+    
+    Возвращает:
+    {
+        "status": true/false,
+        "message": "..."
+    }
+    """
+    try:
+        schedule_manager = ScheduleManager()
+        result = schedule_manager.delete_lesson(lesson_id)
+        schedule_manager.close_connection()
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
 
 
 if __name__ == "__main__":

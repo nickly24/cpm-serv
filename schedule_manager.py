@@ -1,0 +1,248 @@
+import pymongo
+from datetime import datetime
+from typing import List, Dict, Optional
+
+class ScheduleManager:
+    def __init__(self):
+        self.client = pymongo.MongoClient(
+            host="109.73.202.73",
+            port=27017,
+            username="gen_user",
+            password="77tanufe",
+            authSource="admin"
+        )
+        self.db = self.client.cpm_db
+        self.collection = self.db.schedule
+    
+    def get_all_schedule(self) -> Dict:
+        """Получить все занятия из расписания"""
+        try:
+            # Сортируем по дню недели и времени начала
+            days_order = {
+                'Понедельник': 1,
+                'Вторник': 2,
+                'Среда': 3,
+                'Четверг': 4,
+                'Пятница': 5,
+                'Суббота': 6,
+                'Воскресенье': 7
+            }
+            
+            pipeline = [
+                {
+                    "$addFields": {
+                        "day_order": {
+                            "$switch": {
+                                "branches": [
+                                    {"case": {"$eq": ["$day_of_week", "Понедельник"]}, "then": 1},
+                                    {"case": {"$eq": ["$day_of_week", "Вторник"]}, "then": 2},
+                                    {"case": {"$eq": ["$day_of_week", "Среда"]}, "then": 3},
+                                    {"case": {"$eq": ["$day_of_week", "Четверг"]}, "then": 4},
+                                    {"case": {"$eq": ["$day_of_week", "Пятница"]}, "then": 5},
+                                    {"case": {"$eq": ["$day_of_week", "Суббота"]}, "then": 6},
+                                    {"case": {"$eq": ["$day_of_week", "Воскресенье"]}, "then": 7}
+                                ],
+                                "default": 8
+                            }
+                        }
+                    }
+                },
+                {"$sort": {"day_order": 1, "start_time": 1}}
+            ]
+            
+            schedule = list(self.collection.aggregate(pipeline))
+            
+            return {
+                "status": True,
+                "message": "Расписание успешно загружено",
+                "schedule": schedule
+            }
+            
+        except Exception as e:
+            return {
+                "status": False,
+                "error": f"Ошибка при загрузке расписания: {str(e)}"
+            }
+    
+    def add_lesson(self, lesson_data: Dict) -> Dict:
+        """Добавить новое занятие"""
+        try:
+            # Валидация данных
+            required_fields = ['day_of_week', 'start_time', 'end_time', 'lesson_name', 'teacher_name', 'location']
+            for field in required_fields:
+                if not lesson_data.get(field):
+                    return {
+                        "status": False,
+                        "error": f"Поле '{field}' обязательно для заполнения"
+                    }
+            
+            # Проверяем корректность дня недели
+            valid_days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            if lesson_data['day_of_week'] not in valid_days:
+                return {
+                    "status": False,
+                    "error": "Некорректный день недели. Используйте: Понедельник, Вторник, Среда, Четверг, Пятница, Суббота, Воскресенье"
+                }
+            
+            # Проверяем, что время окончания больше времени начала
+            if lesson_data['start_time'] >= lesson_data['end_time']:
+                return {
+                    "status": False,
+                    "error": "Время окончания должно быть больше времени начала"
+                }
+            
+            # Проверяем пересечения с существующими занятиями
+            existing_lesson = self.collection.find_one({
+                "day_of_week": lesson_data['day_of_week'],
+                "$or": [
+                    {
+                        "start_time": {"$lt": lesson_data['end_time']},
+                        "end_time": {"$gt": lesson_data['start_time']}
+                    }
+                ]
+            })
+            
+            if existing_lesson:
+                return {
+                    "status": False,
+                    "error": f"Занятие пересекается с существующим: {existing_lesson['lesson_name']} ({existing_lesson['start_time']}-{existing_lesson['end_time']})"
+                }
+            
+            # Добавляем метаданные
+            lesson_data['created_at'] = datetime.now()
+            lesson_data['updated_at'] = datetime.now()
+            
+            result = self.collection.insert_one(lesson_data)
+            
+            return {
+                "status": True,
+                "message": "Занятие успешно добавлено",
+                "lesson_id": str(result.inserted_id)
+            }
+            
+        except Exception as e:
+            return {
+                "status": False,
+                "error": f"Ошибка при добавлении занятия: {str(e)}"
+            }
+    
+    def edit_lesson(self, lesson_id: str, lesson_data: Dict) -> Dict:
+        """Редактировать занятие"""
+        try:
+            from bson import ObjectId
+            
+            # Проверяем существование занятия
+            if not ObjectId.is_valid(lesson_id):
+                return {
+                    "status": False,
+                    "error": "Некорректный ID занятия"
+                }
+            
+            existing_lesson = self.collection.find_one({"_id": ObjectId(lesson_id)})
+            if not existing_lesson:
+                return {
+                    "status": False,
+                    "error": "Занятие не найдено"
+                }
+            
+            # Валидация данных
+            required_fields = ['day_of_week', 'start_time', 'end_time', 'lesson_name', 'teacher_name', 'location']
+            for field in required_fields:
+                if not lesson_data.get(field):
+                    return {
+                        "status": False,
+                        "error": f"Поле '{field}' обязательно для заполнения"
+                    }
+            
+            # Проверяем корректность дня недели
+            valid_days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            if lesson_data['day_of_week'] not in valid_days:
+                return {
+                    "status": False,
+                    "error": "Некорректный день недели"
+                }
+            
+            # Проверяем, что время окончания больше времени начала
+            if lesson_data['start_time'] >= lesson_data['end_time']:
+                return {
+                    "status": False,
+                    "error": "Время окончания должно быть больше времени начала"
+                }
+            
+            # Проверяем пересечения с другими занятиями (исключая текущее)
+            conflicting_lesson = self.collection.find_one({
+                "_id": {"$ne": ObjectId(lesson_id)},
+                "day_of_week": lesson_data['day_of_week'],
+                "$or": [
+                    {
+                        "start_time": {"$lt": lesson_data['end_time']},
+                        "end_time": {"$gt": lesson_data['start_time']}
+                    }
+                ]
+            })
+            
+            if conflicting_lesson:
+                return {
+                    "status": False,
+                    "error": f"Занятие пересекается с существующим: {conflicting_lesson['lesson_name']} ({conflicting_lesson['start_time']}-{conflicting_lesson['end_time']})"
+                }
+            
+            # Обновляем данные
+            lesson_data['updated_at'] = datetime.now()
+            
+            result = self.collection.update_one(
+                {"_id": ObjectId(lesson_id)},
+                {"$set": lesson_data}
+            )
+            
+            if result.modified_count > 0:
+                return {
+                    "status": True,
+                    "message": "Занятие успешно обновлено"
+                }
+            else:
+                return {
+                    "status": False,
+                    "error": "Не удалось обновить занятие"
+                }
+                
+        except Exception as e:
+            return {
+                "status": False,
+                "error": f"Ошибка при редактировании занятия: {str(e)}"
+            }
+    
+    def delete_lesson(self, lesson_id: str) -> Dict:
+        """Удалить занятие"""
+        try:
+            from bson import ObjectId
+            
+            if not ObjectId.is_valid(lesson_id):
+                return {
+                    "status": False,
+                    "error": "Некорректный ID занятия"
+                }
+            
+            result = self.collection.delete_one({"_id": ObjectId(lesson_id)})
+            
+            if result.deleted_count > 0:
+                return {
+                    "status": True,
+                    "message": "Занятие успешно удалено"
+                }
+            else:
+                return {
+                    "status": False,
+                    "error": "Занятие не найдено"
+                }
+                
+        except Exception as e:
+            return {
+                "status": False,
+                "error": f"Ошибка при удалении занятия: {str(e)}"
+            }
+    
+    def close_connection(self):
+        """Закрыть соединение с базой данных"""
+        self.client.close()
+

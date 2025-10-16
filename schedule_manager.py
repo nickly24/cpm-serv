@@ -9,7 +9,12 @@ class ScheduleManager:
             port=27017,
             username="gen_user",
             password="77tanufe",
-            authSource="admin"
+            authSource="admin",
+            serverSelectionTimeoutMS=5000,  # 5 секунд таймаут
+            connectTimeoutMS=5000,         # 5 секунд на подключение
+            socketTimeoutMS=5000,          # 5 секунд на операции
+            maxPoolSize=10,                # Максимум 10 соединений
+            retryWrites=True
         )
         self.db = self.client.cpm_db
         self.collection = self.db.schedule
@@ -17,6 +22,8 @@ class ScheduleManager:
     def get_all_schedule(self) -> Dict:
         """Получить все занятия из расписания"""
         try:
+            # Проверяем подключение к MongoDB
+            self.client.admin.command('ping')
             # Сортируем по дню недели и времени начала
             days_order = {
                 'Понедельник': 1,
@@ -67,6 +74,8 @@ class ScheduleManager:
     def add_lesson(self, lesson_data: Dict) -> Dict:
         """Добавить новое занятие"""
         try:
+            # Проверяем подключение к MongoDB
+            self.client.admin.command('ping')
             # Валидация данных
             required_fields = ['day_of_week', 'start_time', 'end_time', 'lesson_name', 'teacher_name', 'location']
             for field in required_fields:
@@ -129,6 +138,8 @@ class ScheduleManager:
     def edit_lesson(self, lesson_id: str, lesson_data: Dict) -> Dict:
         """Редактировать занятие"""
         try:
+            # Проверяем подключение к MongoDB
+            self.client.admin.command('ping')
             from bson import ObjectId
             
             # Проверяем существование занятия
@@ -215,6 +226,8 @@ class ScheduleManager:
     def delete_lesson(self, lesson_id: str) -> Dict:
         """Удалить занятие"""
         try:
+            # Проверяем подключение к MongoDB
+            self.client.admin.command('ping')
             from bson import ObjectId
             
             if not ObjectId.is_valid(lesson_id):

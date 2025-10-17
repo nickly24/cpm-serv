@@ -5,18 +5,14 @@ from typing import List, Dict, Optional
 class ScheduleManager:
     def __init__(self):
         self.client = pymongo.MongoClient(
-            host="109.73.202.73",
-            port=27017,
-            username="gen_user",
-            password="77tanufe",
-            authSource="admin",
+            'mongodb://gen_user:77tanufe@109.73.202.73:27017/default_db?authSource=admin&directConnection=true',
             serverSelectionTimeoutMS=5000,  # 5 секунд таймаут
             connectTimeoutMS=5000,         # 5 секунд на подключение
             socketTimeoutMS=5000,          # 5 секунд на операции
             maxPoolSize=10,                # Максимум 10 соединений
             retryWrites=True
         )
-        self.db = self.client.cpm_db
+        self.db = self.client.default_db
         self.collection = self.db.schedule
     
     def get_all_schedule(self) -> Dict:
@@ -24,40 +20,13 @@ class ScheduleManager:
         try:
             # Проверяем подключение к MongoDB
             self.client.admin.command('ping')
-            # Сортируем по дню недели и времени начала
-            days_order = {
-                'Понедельник': 1,
-                'Вторник': 2,
-                'Среда': 3,
-                'Четверг': 4,
-                'Пятница': 5,
-                'Суббота': 6,
-                'Воскресенье': 7
-            }
+            # Получаем все занятия без сложной агрегации
+            schedule = list(self.collection.find())
             
-            pipeline = [
-                {
-                    "$addFields": {
-                        "day_order": {
-                            "$switch": {
-                                "branches": [
-                                    {"case": {"$eq": ["$day_of_week", "Понедельник"]}, "then": 1},
-                                    {"case": {"$eq": ["$day_of_week", "Вторник"]}, "then": 2},
-                                    {"case": {"$eq": ["$day_of_week", "Среда"]}, "then": 3},
-                                    {"case": {"$eq": ["$day_of_week", "Четверг"]}, "then": 4},
-                                    {"case": {"$eq": ["$day_of_week", "Пятница"]}, "then": 5},
-                                    {"case": {"$eq": ["$day_of_week", "Суббота"]}, "then": 6},
-                                    {"case": {"$eq": ["$day_of_week", "Воскресенье"]}, "then": 7}
-                                ],
-                                "default": 8
-                            }
-                        }
-                    }
-                },
-                {"$sort": {"day_order": 1, "start_time": 1}}
-            ]
-            
-            schedule = list(self.collection.aggregate(pipeline))
+            # Конвертируем ObjectId в строки для JSON сериализации
+            for lesson in schedule:
+                if '_id' in lesson:
+                    lesson['_id'] = str(lesson['_id'])
             
             return {
                 "status": True,

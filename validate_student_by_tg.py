@@ -3,13 +3,13 @@ from db import db
 
 def validate_student_by_tg_name(tg_name):
     """
-    Проверяет существование студента по Telegram никнейму
+    Проверяет существование студента по Telegram никнейму и возвращает его данные включая логин и пароль
     
     Args:
         tg_name (str): Telegram никнейм студента
     
     Returns:
-        dict: Результат проверки с данными студента, если найден
+        dict: Результат проверки с данными студента (ФИО, класс, группа, логин, пароль), если найден
     """
     connection = None
     cursor = None
@@ -31,11 +31,13 @@ def validate_student_by_tg_name(tg_name):
         )
         cursor = connection.cursor(dictionary=True)
         
-        # Ищем студента по tg_name
+        # Ищем студента по tg_name с получением логина и пароля из auth_users
         query = """
-        SELECT id, full_name, class, group_id, tg_name
-        FROM students 
-        WHERE tg_name = %s
+        SELECT s.id, s.full_name, s.class, s.group_id, s.tg_name, 
+               a.username as login, a.password
+        FROM students s
+        LEFT JOIN auth_users a ON s.id = a.ref_id AND a.role = 'student'
+        WHERE s.tg_name = %s
         """
         cursor.execute(query, (tg_name,))
         student = cursor.fetchone()
@@ -54,7 +56,9 @@ def validate_student_by_tg_name(tg_name):
                 "full_name": student['full_name'],
                 "class": student['class'],
                 "group_id": student['group_id'],
-                "tg_name": student['tg_name']
+                "tg_name": student['tg_name'],
+                "login": student['login'],
+                "password": student['password']
             }
         }
         

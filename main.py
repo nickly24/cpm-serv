@@ -34,7 +34,7 @@ from schedule_manager import ScheduleManager
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {  # Обратите внимание на "/*" вместо "/api/*"
-        "origins": "*",  # Только ваш фронтенд
+        "origins": ["https://cpm-lms.ru", "http://localhost:3000"],  # Только разрешенные домены
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True

@@ -92,6 +92,8 @@ def pass_hw():
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     session_id = data.get('sessionId')
     date_pass = data.get('datePass')
+    student_id = data.get('studentId')
+    homework_id = data.get('homeworkId')
 
     if not date_pass:
         return jsonify({'error': 'Поле "datePass" отсутствует в запросе'}), 400
@@ -108,7 +110,7 @@ def pass_hw():
         return jsonify({'error': f'Произошла непредвиденная ошибка при обработке даты: {str(e)}'}), 500
 
 
-    answer = pass_homework(session_id, date_object)
+    answer = pass_homework(session_id, date_object, student_id, homework_id)
     return jsonify(answer)
 
 

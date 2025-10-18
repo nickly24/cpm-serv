@@ -1,7 +1,7 @@
 import mysql.connector
 import datetime
 from db import db
-def pass_homework(session_id, date_pass):
+def pass_homework(session_id, date_pass, student_id=None, homework_id=None):
     connection = mysql.connector.connect(
         host=db.host,
         port=db.port,
@@ -12,15 +12,22 @@ def pass_homework(session_id, date_pass):
     cursor = connection.cursor(dictionary=True)
 
     try:
-        # 1. Получаем homework_id по session_id
-        cursor.execute("SELECT homework_id FROM homework_sessions WHERE id = %s", (session_id,))
-        session = cursor.fetchone()
-        
-        if not session:
-            print("Сессия не найдена.")
-            return {"status": False}
+        # 1. Получаем homework_id - либо из session_id, либо напрямую
+        if session_id:
+            cursor.execute("SELECT homework_id, student_id FROM homework_sessions WHERE id = %s", (session_id,))
+            session = cursor.fetchone()
+            
+            if not session:
+                print("Сессия не найдена.")
+                return {"status": False}
 
-        homework_id = session["homework_id"]
+            homework_id = session["homework_id"]
+            student_id = session["student_id"]
+        else:
+            # Если session_id не передан, используем прямые параметры
+            if not homework_id or not student_id:
+                print("Необходимо указать либо session_id, либо homework_id и student_id.")
+                return {"status": False}
 
         # 2. Получаем deadline из homework
         cursor.execute("SELECT deadline FROM homework WHERE id = %s", (homework_id,))
@@ -40,13 +47,23 @@ def pass_homework(session_id, date_pass):
             if result < 0:
                 result = 0
 
-        # 4. Обновляем homework_session
-        update_query = """
-            UPDATE homework_sessions 
-            SET status = 1, result = %s, date_pass = %s 
-            WHERE id = %s
-        """
-        cursor.execute(update_query, (result, date_pass, session_id))
+        # 4. Обновляем или создаем homework_session
+        if session_id:
+            # Если сессия существует, обновляем её
+            update_query = """
+                UPDATE homework_sessions 
+                SET status = 1, result = %s, date_pass = %s 
+                WHERE id = %s
+            """
+            cursor.execute(update_query, (result, date_pass, session_id))
+        else:
+            # Если сессии нет, создаем новую
+            insert_query = """
+                INSERT INTO homework_sessions (status, result, homework_id, student_id, date_pass)
+                VALUES (1, %s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (result, homework_id, student_id, date_pass))
+        
         connection.commit()
 
         print(f"Оценка выставлена: {result} баллов")

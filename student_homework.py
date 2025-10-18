@@ -30,7 +30,7 @@ def get_student_homework_dashboard(student_id):
             session = cursor.fetchone()
 
             if not session:
-                homework_status = "ДЗ не FFFF (нет записи)"
+                homework_status = "ДЗ не сделано"
                 score = None
             else:
                 if session["status"] == 1:

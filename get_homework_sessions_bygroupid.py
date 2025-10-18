@@ -39,13 +39,27 @@ def get_proctor_homework_sessions(proctor_id, homework_id):
         cursor.execute(query, tuple(student_ids) + (homework_id,))
         sessions = cursor.fetchall()
 
-        if not sessions:
-            return {"status": False, "res": []}
+        # Создаем словарь существующих сессий для быстрого поиска
+        existing_sessions = {session["student_id"]: session for session in sessions}
 
+        # Создаем результат для всех студентов группы
         result_with_names = []
-        for session in sessions:
-            session_data = session.copy()
-            session_data["student_full_name"] = student_dict.get(session["student_id"], "")
+        for student_id in student_ids:
+            if student_id in existing_sessions:
+                # Если сессия существует, используем её данные
+                session_data = existing_sessions[student_id].copy()
+                session_data["student_full_name"] = student_dict.get(student_id, "")
+            else:
+                # Если сессии нет, создаем запись с дефолтными значениями
+                session_data = {
+                    "id": None,
+                    "status": 0,
+                    "result": 0,
+                    "homework_id": homework_id,
+                    "student_id": student_id,
+                    "date_pass": None,
+                    "student_full_name": student_dict.get(student_id, "")
+                }
             result_with_names.append(session_data)
 
         return {"status": True, "res": result_with_names}

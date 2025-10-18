@@ -64,6 +64,7 @@ def edit_homework_session(session_id, result=None, date_pass=None, status=None):
             
             if homework_data:
                 deadline = homework_data["deadline"]
+                
                 # Пересчитываем баллы по той же логике
                 result = 100
                 if date_val > deadline:
@@ -97,7 +98,15 @@ def edit_homework_session(session_id, result=None, date_pass=None, status=None):
         cursor.execute(update_sql, tuple(values))
         connection.commit()
 
-        return {"status": True}
+        # Получаем обновленные данные для возврата
+        cursor.execute("SELECT result, date_pass FROM homework_sessions WHERE id = %s", (session_id,))
+        updated_session = cursor.fetchone()
+        
+        return {
+            "status": True, 
+            "result": updated_session["result"] if updated_session else None,
+            "date_pass": updated_session["date_pass"] if updated_session else None
+        }
 
     except mysql.connector.Error as err:
         connection.rollback()

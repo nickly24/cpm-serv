@@ -129,6 +129,7 @@ def edit_hw_session():
     date_pass = data.get('datePass')
     status = data.get('status')
 
+
     if not session_id:
         return jsonify({'error': 'Поле "sessionId" обязательно'}), 400
 

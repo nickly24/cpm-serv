@@ -53,6 +53,29 @@ def edit_homework_session(session_id, result=None, date_pass=None, status=None):
             else:
                 return {"status": False, "error": "invalid_date_pass_type"}
 
+            # Получаем deadline для пересчета баллов
+            cursor.execute("""
+                SELECT h.deadline 
+                FROM homework_sessions hs 
+                JOIN homework h ON hs.homework_id = h.id 
+                WHERE hs.id = %s
+            """, (session_id,))
+            homework_data = cursor.fetchone()
+            
+            if homework_data:
+                deadline = homework_data["deadline"]
+                # Пересчитываем баллы по той же логике
+                result = 100
+                if date_val > deadline:
+                    delta_days = (date_val - deadline).days
+                    result -= delta_days * 5
+                    if result < 0:
+                        result = 0
+                
+                # Добавляем обновление результата
+                set_clauses.append("result = %s")
+                values.append(result)
+
             set_clauses.append("date_pass = %s")
             values.append(date_val)
 

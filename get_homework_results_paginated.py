@@ -120,7 +120,7 @@ def get_homework_results_paginated(page=1, limit=10, filters=None):
                 END as days_overdue
             FROM students s
             LEFT JOIN homework_sessions hs ON s.id = hs.student_id AND hs.homework_id = %s
-            LEFT JOIN groups g ON s.group_id = g.id
+            LEFT JOIN `groups` g ON s.group_id = g.id
             CROSS JOIN homework h ON h.id = %s
             ORDER BY s.full_name
             """
@@ -225,7 +225,7 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
             END as days_overdue
         FROM students s
         LEFT JOIN homework_sessions hs ON s.id = hs.student_id AND hs.homework_id = %s
-        LEFT JOIN groups g ON s.group_id = g.id
+        LEFT JOIN `groups` g ON s.group_id = g.id
         CROSS JOIN homework h ON h.id = %s
         {where_clause}
         ORDER BY s.full_name
@@ -241,7 +241,7 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
         SELECT COUNT(*) as total
         FROM students s
         LEFT JOIN homework_sessions hs ON s.id = hs.student_id AND hs.homework_id = %s
-        LEFT JOIN groups g ON s.group_id = g.id
+        LEFT JOIN `groups` g ON s.group_id = g.id
         CROSS JOIN homework h ON h.id = %s
         {where_clause}
         """

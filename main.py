@@ -30,6 +30,8 @@ from add_student import add_student
 from edit_student import edit_student
 from validate_student_by_tg import validate_student_by_tg_name
 from schedule_manager import ScheduleManager
+from get_all_homework_results import get_all_homework_results
+from get_homework_results_paginated import get_homework_results_paginated, get_homework_students
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -119,6 +121,80 @@ def ghst():
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     student_id = data.get('studentId') 
     answer = get_student_homework_dashboard(student_id)
+    return jsonify(answer)
+
+@app.route("/api/get-all-homework-results", methods=['GET'])
+def get_all_hw_results():
+    """
+    Получить все домашние задания с результатами всех студентов
+    Для админки - полная статистика по всем ДЗ
+    """
+    answer = get_all_homework_results()
+    return jsonify(answer)
+
+@app.route("/api/get-homework-results-paginated", methods=['POST'])
+def get_hw_results_paginated():
+    """
+    Получить домашние задания с пагинацией
+    Оптимизированная версия для больших объемов данных
+    """
+    data = request.get_json() or {}
+    
+    page = data.get('page', 1)
+    limit = data.get('limit', 10)
+    filters = data.get('filters', {})
+    
+    # Валидация параметров
+    try:
+        page = int(page)
+        limit = int(limit)
+        if page < 1:
+            page = 1
+        if limit < 1 or limit > 100:  # Максимум 100 заданий за раз
+            limit = 10
+    except (ValueError, TypeError):
+        return jsonify({
+            "status": False,
+            "error": "Неверные параметры пагинации"
+        }), 400
+    
+    answer = get_homework_results_paginated(page, limit, filters)
+    return jsonify(answer)
+
+@app.route("/api/get-homework-students", methods=['POST'])
+def get_hw_students():
+    """
+    Получить студентов для конкретного домашнего задания с пагинацией
+    """
+    data = request.get_json() or {}
+    
+    homework_id = data.get('homework_id')
+    page = data.get('page', 1)
+    limit = data.get('limit', 50)
+    filters = data.get('filters', {})
+    
+    if not homework_id:
+        return jsonify({
+            "status": False,
+            "error": "homework_id обязателен"
+        }), 400
+    
+    # Валидация параметров
+    try:
+        homework_id = int(homework_id)
+        page = int(page)
+        limit = int(limit)
+        if page < 1:
+            page = 1
+        if limit < 1 or limit > 200:  # Максимум 200 студентов за раз
+            limit = 50
+    except (ValueError, TypeError):
+        return jsonify({
+            "status": False,
+            "error": "Неверные параметры"
+        }), 400
+    
+    answer = get_homework_students(homework_id, page, limit, filters)
     return jsonify(answer)
 
 @app.route("/api/edit-homework-session", methods=['POST'])

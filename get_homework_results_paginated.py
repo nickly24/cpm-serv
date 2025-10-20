@@ -209,6 +209,8 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
             s.full_name as student_name,
             s.class as student_class,
             g.name as group_name,
+            hs.id as session_id,
+            hs.id as session_id,
             hs.status,
             hs.result,
             hs.date_pass,
@@ -226,14 +228,14 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
         FROM students s
         LEFT JOIN homework_sessions hs ON s.id = hs.student_id AND hs.homework_id = %s
         LEFT JOIN `groups` g ON s.group_id = g.id
-        CROSS JOIN homework h ON h.id = %s
+        CROSS JOIN homework h
         {where_clause}
         ORDER BY s.full_name
         LIMIT %s OFFSET %s
         """
         
         offset = (page - 1) * limit
-        cursor.execute(students_query, params + [homework_id, limit, offset])
+        cursor.execute(students_query, params + [limit, offset])
         students = cursor.fetchall()
 
         # Получаем общее количество студентов
@@ -242,10 +244,10 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
         FROM students s
         LEFT JOIN homework_sessions hs ON s.id = hs.student_id AND hs.homework_id = %s
         LEFT JOIN `groups` g ON s.group_id = g.id
-        CROSS JOIN homework h ON h.id = %s
+        CROSS JOIN homework h
         {where_clause}
         """
-        cursor.execute(count_query, params + [homework_id])
+        cursor.execute(count_query, params)
         total_items = cursor.fetchone()['total']
         total_pages = (total_items + limit - 1) // limit
 

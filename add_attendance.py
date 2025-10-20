@@ -14,22 +14,22 @@ def add_attendance(student_id, date_str):
 
     try:
         # Проверим существует ли студент
-        cursor.execute("SELECT id FROM students WHERE id = %s", (student_id,))
+        cursor.execute("SELECT id, full_name FROM students WHERE id = %s", (student_id,))
         student = cursor.fetchone()
         if not student:
-            return {"status": False, "error": "Student not found"}
+            return {"status": False, "error": "Студент не найден"}
 
         # Преобразуем строку в дату
         try:
             date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
-            return {"status": False, "error": "Invalid date format (expected YYYY-MM-DD)"}
+            return {"status": False, "error": "Неверный формат даты (ожидается YYYY-MM-DD)"}
 
         # Проверим существует ли уже запись на эту дату для этого студента
         cursor.execute("SELECT id FROM attendance WHERE student_id = %s AND date = %s", (student_id, date_obj))
         existing = cursor.fetchone()
         if existing:
-            return {"status": False, "error": "Attendance record already exists for this date"}
+            return {"status": False, "error": f"Студент {student[1]} уже отмечен на {date_obj.strftime('%d.%m.%Y')}"}
 
         # Добавляем запись в attendance
         insert_query = "INSERT INTO attendance (date, student_id) VALUES (%s, %s)"

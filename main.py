@@ -23,6 +23,7 @@ from get_users_by_role import get_users_by_role
 from delete_user import delete_user
 from get_sessions import get_all_exams
 from get_students import get_all_students
+from get_student_by_id import get_student_by_id
 from db_connect import get_db_connection
 import mysql.connector
 from edit_homework_session import edit_homework_session
@@ -36,7 +37,11 @@ from get_homework_results_paginated import get_homework_results_paginated, get_h
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {  # Обратите внимание на "/*" вместо "/api/*"
-        "origins": ["https://cpm-lms.ru", "http://localhost:3000"],  # Только разрешенные домены
+        "origins": [
+            "https://cpm-lms.ru",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ],  # Только разрешенные домены
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
@@ -328,6 +333,26 @@ def del_us():
 def get_us():
     answer = get_all_students()
     return jsonify(answer)
+
+
+@app.route("/api/get-class-name-by-studID", methods=['POST'])
+def get_class_name_by_stud_id():
+    """
+    Получает информацию о студенте по ID
+    Ожидает JSON: {"student_id": "123"}
+    """
+    try:
+        data = request.get_json()
+        student_id = data.get('student_id')
+        
+        if not student_id:
+            return jsonify({"status": False, "error": "Отсутствует student_id"}), 400
+        
+        result = get_student_by_id(student_id)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"status": False, "error": str(e)}), 500
 
 
 @app.route("/api/add-student", methods=['POST'])

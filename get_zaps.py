@@ -27,11 +27,10 @@ def get_zaps_by_student(student_id):
                 student_id,
                 text,
                 status,
-                answer,
-                created_at
+                answer
             FROM zaps
             WHERE student_id = %s
-            ORDER BY created_at DESC
+            ORDER BY id DESC
         """, (student_id,))
 
         zaps = cursor.fetchall()
@@ -74,7 +73,6 @@ def get_all_zaps(status=None):
                 z.text,
                 z.status,
                 z.answer,
-                z.created_at,
                 s.full_name
             FROM zaps z
             JOIN students s ON z.student_id = s.id
@@ -85,7 +83,7 @@ def get_all_zaps(status=None):
             query += " WHERE z.status = %s"
             params.append(status)
         
-        query += " ORDER BY z.created_at DESC"
+        query += " ORDER BY z.id DESC"
 
         cursor.execute(query, tuple(params))
         zaps = cursor.fetchall()
@@ -129,7 +127,6 @@ def get_zap_by_id(zap_id):
                 z.text,
                 z.status,
                 z.answer,
-                z.created_at,
                 s.full_name
             FROM zaps z
             JOIN students s ON z.student_id = s.id

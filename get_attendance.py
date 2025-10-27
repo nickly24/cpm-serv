@@ -42,7 +42,7 @@ def get_attendance_diary(year: str, month: str):
         end_date = f"{year_int}-{month_int:02d}-{num_days:02d}"
 
         cursor.execute("""
-            SELECT date, student_id
+            SELECT date, student_id, attendance_rate
             FROM attendance
             WHERE date BETWEEN %s AND %s
         """, (start_date, end_date))
@@ -53,9 +53,14 @@ def get_attendance_diary(year: str, month: str):
         attendance_map = {}
         for row in attendance_raw:
             date_str = row['date'].strftime('%Y-%m-%d')
+            student_id = row['student_id']
+            attendance_rate = row['attendance_rate']
+            
             if date_str not in attendance_map:
-                attendance_map[date_str] = set()
-            attendance_map[date_str].add(row['student_id'])
+                attendance_map[date_str] = {}
+            
+            # Храним attendance_rate для каждого студента
+            attendance_map[date_str][student_id] = attendance_rate
 
         # Формируем итоговый отчет
         students_report = []
@@ -69,9 +74,14 @@ def get_attendance_diary(year: str, month: str):
                 if weekday >= 5:
                     attendance_marks.append("")
                 elif date_str in attendance_map and student_id in attendance_map[date_str]:
-                    attendance_marks.append("+")
+                    # Если есть запись, проверяем attendance_rate
+                    rate = attendance_map[date_str][student_id]
+                    if rate == 2:
+                        attendance_marks.append("✓")  # Уважительная причина
+                    else:
+                        attendance_marks.append("+")  # Очная посещаемость
                 else:
-                    attendance_marks.append("-")
+                    attendance_marks.append("-")  # Отсутствовал
 
             students_report.append({
                 'student_id': student_id,

@@ -2,7 +2,7 @@ import mysql.connector
 from db import db
 import datetime
 
-def add_attendance(student_id, date_str):
+def add_attendance(student_id, date_str, attendance_rate=1, zap_id=None):
     connection = mysql.connector.connect(
         host=db.host,
         port=db.port,
@@ -26,14 +26,23 @@ def add_attendance(student_id, date_str):
             return {"status": False, "error": "Неверный формат даты (ожидается YYYY-MM-DD)"}
 
         # Проверим существует ли уже запись на эту дату для этого студента
-        cursor.execute("SELECT id FROM attendance WHERE student_id = %s AND date = %s", (student_id, date_obj))
+        cursor.execute("SELECT id, attendance_rate FROM attendance WHERE student_id = %s AND date = %s", (student_id, date_obj))
         existing = cursor.fetchone()
         if existing:
-            return {"status": False, "error": f"Студент {student[1]} уже отмечен на {date_obj.strftime('%d.%m.%Y')}"}
+            # Если есть уважительная причина (rate=2), не перезаписываем
+            if existing[1] == 2:
+                return {"status": False, "error": f"Студент {student[1]} уже отмечен с уважительной причиной на {date_obj.strftime('%d.%m.%Y')}"}
+            else:
+                return {"status": False, "error": f"Студент {student[1]} уже отмечен на {date_obj.strftime('%d.%m.%Y')}"}
 
         # Добавляем запись в attendance
-        insert_query = "INSERT INTO attendance (date, student_id) VALUES (%s, %s)"
-        cursor.execute(insert_query, (date_obj, student_id))
+        if zap_id:
+            insert_query = "INSERT INTO attendance (date, student_id, attendance_rate, zap_id) VALUES (%s, %s, %s, %s)"
+            cursor.execute(insert_query, (date_obj, student_id, attendance_rate, zap_id))
+        else:
+            insert_query = "INSERT INTO attendance (date, student_id, attendance_rate) VALUES (%s, %s, %s)"
+            cursor.execute(insert_query, (date_obj, student_id, attendance_rate))
+        
         connection.commit()
 
         return {"status": True}

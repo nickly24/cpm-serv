@@ -33,6 +33,10 @@ from validate_student_by_tg import validate_student_by_tg_name
 from schedule_manager import ScheduleManager
 from get_all_homework_results import get_all_homework_results
 from get_homework_results_paginated import get_homework_results_paginated, get_homework_students
+from create_zap import create_zap
+from get_zaps import get_zaps_by_student, get_all_zaps, get_zap_by_id
+from process_zap import process_zap
+import base64
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -1096,6 +1100,212 @@ def delete_lesson(lesson_id):
         schedule_manager = ScheduleManager()
         result = schedule_manager.delete_lesson(lesson_id)
         schedule_manager.close_connection()
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+# ============================================================================
+# РОУТЫ ДЛЯ ЗАПРОСОВ НА ОТГУЛ (ZAP)
+# ============================================================================
+
+@app.route("/api/create-zap", methods=['POST'])
+def create_zap_route():
+    """
+    Создать запрос на отгул от студента
+    
+    Ожидаемые данные в JSON:
+    {
+        "student_id": 123,
+        "text": "Текст запроса",
+        "images": ["base64_image1", "base64_image2", ...]  // необязательно
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": False,
+                "error": "Данные не предоставлены"
+            }), 400
+        
+        student_id = data.get('student_id')
+        text = data.get('text')
+        images_base64 = data.get('images', [])
+        
+        if not student_id or not text:
+            return jsonify({
+                "status": False,
+                "error": "student_id и text обязательны"
+            }), 400
+        
+        # Преобразуем base64 изображения в blob
+        images_blob = []
+        for img_base64 in images_base64:
+            try:
+                # Убираем префикс data:image/...;base64, если есть
+                if ',' in img_base64:
+                    img_base64 = img_base64.split(',')[1]
+                
+                img_blob = base64.b64decode(img_base64)
+                images_blob.append(img_blob)
+            except Exception as e:
+                return jsonify({
+                    "status": False,
+                    "error": f"Ошибка обработки изображения: {str(e)}"
+                }), 400
+        
+        result = create_zap(student_id, text, images_blob if images_blob else None)
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/get-zaps-student", methods=['POST'])
+def get_zaps_student_route():
+    """
+    Получить запросы на отгул студента
+    
+    Ожидаемые данные в JSON:
+    {
+        "student_id": 123
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": False,
+                "error": "Данные не предоставлены"
+            }), 400
+        
+        student_id = data.get('student_id')
+        
+        if not student_id:
+            return jsonify({
+                "status": False,
+                "error": "student_id обязателен"
+            }), 400
+        
+        result = get_zaps_by_student(student_id)
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/get-all-zaps", methods=['GET'])
+def get_all_zaps_route():
+    """
+    Получить все запросы на отгул (для админов)
+    
+    Query параметры (необязательно):
+    ?status=set  // фильтр по статусу ('set', 'apr', 'dec')
+    """
+    try:
+        status = request.args.get('status', None)
+        
+        result = get_all_zaps(status)
+        
+        http_code = 200 if result.get('status') else 400
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/get-zap/<zap_id>", methods=['GET'])
+def get_zap_route(zap_id):
+    """
+    Получить запрос на отгул по ID с изображениями
+    
+    URL параметр: zap_id - ID запроса
+    """
+    try:
+        result = get_zap_by_id(zap_id)
+        
+        if result.get('status'):
+            # Преобразуем blob изображения в base64
+            for img in result.get('images', []):
+                if img.get('img'):
+                    img_base64 = base64.b64encode(img['img']).decode('utf-8')
+                    img['img_base64'] = f"data:image/jpeg;base64,{img_base64}"
+                    # Удаляем blob из ответа (чтобы не передавать большие данные)
+                    img['img'] = None
+        
+        http_code = 200 if result.get('status') else 404
+        return jsonify(result), http_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": False,
+            "error": f"Внутренняя ошибка сервера: {str(e)}"
+        }), 500
+
+
+@app.route("/api/process-zap", methods=['POST'])
+def process_zap_route():
+    """
+    Обработать запрос на отгул (одобрить/отклонить)
+    При одобрении можно привязать к датам в посещаемости
+    
+    Ожидаемые данные в JSON:
+    {
+        "zap_id": 123,
+        "status": "apr",  // 'apr' - одобрено, 'dec' - отклонено
+        "answer": "Ваш ответ",
+        "dates": ["2025-01-15", "2025-01-16"]  // необязательно, даты для привязки
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "status": False,
+                "error": "Данные не предоставлены"
+            }), 400
+        
+        zap_id = data.get('zap_id')
+        status = data.get('status')
+        answer = data.get('answer', '')
+        dates = data.get('dates', [])
+        
+        if not zap_id or not status:
+            return jsonify({
+                "status": False,
+                "error": "zap_id и status обязательны"
+            }), 400
+        
+        if status not in ['apr', 'dec']:
+            return jsonify({
+                "status": False,
+                "error": "status должен быть 'apr' или 'dec'"
+            }), 400
+        
+        result = process_zap(zap_id, status, answer, dates if dates else None)
         
         http_code = 200 if result.get('status') else 400
         return jsonify(result), http_code

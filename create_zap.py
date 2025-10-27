@@ -9,7 +9,7 @@ def create_zap(student_id, text, images=None):
     Args:
         student_id: ID студента
         text: Текст запроса
-        images: Список blob данных изображений (необязательно)
+        images: Список словарей с blob данных и типом файла [{"data": blob, "type": "image/jpeg"}, ...]
     
     Returns:
         dict: Результат создания с zap_id
@@ -37,12 +37,14 @@ def create_zap(student_id, text, images=None):
         )
         zap_id = cursor.lastrowid
 
-        # Если есть изображения, сохраняем их
+        # Если есть изображения, сохраняем их с типом
         if images:
-            for img_blob in images:
+            for img_data in images:
+                img_blob = img_data.get('data')
+                img_type = img_data.get('type', 'image/jpeg')
                 cursor.execute(
-                    "INSERT INTO zap_img (zap_id, img) VALUES (%s, %s)",
-                    (zap_id, img_blob)
+                    "INSERT INTO zap_img (zap_id, img, type) VALUES (%s, %s, %s)",
+                    (zap_id, img_blob, img_type)
                 )
 
         connection.commit()

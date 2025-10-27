@@ -138,8 +138,8 @@ def get_zap_by_id(zap_id):
         if not zap:
             return {"status": False, "error": "Запрос не найден"}
 
-        # Получаем изображения
-        cursor.execute("SELECT id, img FROM zap_img WHERE zap_id = %s", (zap_id,))
+        # Получаем изображения с типом
+        cursor.execute("SELECT id, img, type FROM zap_img WHERE zap_id = %s", (zap_id,))
         images = cursor.fetchall()
 
         return {

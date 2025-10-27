@@ -1155,23 +1155,29 @@ def create_zap_route():
                 "error": "student_id должен быть числом"
             }), 400
         
-        # Преобразуем base64 изображения в blob
-        images_blob = []
+        # Преобразуем base64 файлы в blob и определяем тип
+        images_data = []
         for img_base64 in images_base64:
             try:
-                # Убираем префикс data:image/...;base64, если есть
+                # Определяем тип файла из data URL
+                file_type = 'image/jpeg'  # по умолчанию
                 if ',' in img_base64:
+                    mime_type = img_base64.split(',')[0].split(':')[1].split(';')[0]
+                    file_type = mime_type
                     img_base64 = img_base64.split(',')[1]
                 
                 img_blob = base64.b64decode(img_base64)
-                images_blob.append(img_blob)
+                images_data.append({
+                    "data": img_blob,
+                    "type": file_type
+                })
             except Exception as e:
                 return jsonify({
                     "status": False,
-                    "error": f"Ошибка обработки изображения: {str(e)}"
+                    "error": f"Ошибка обработки файла: {str(e)}"
                 }), 400
         
-        result = create_zap(student_id, text, images_blob if images_blob else None)
+        result = create_zap(student_id, text, images_data if images_data else None)
         
         http_code = 200 if result.get('status') else 400
         return jsonify(result), http_code
@@ -1268,11 +1274,14 @@ def get_zap_route(zap_id):
         result = get_zap_by_id(zap_id)
         
         if result.get('status'):
-            # Преобразуем blob изображения в base64
+            # Преобразуем blob файлы в base64 с правильным типом
             for img in result.get('images', []):
                 if img.get('img'):
                     img_base64 = base64.b64encode(img['img']).decode('utf-8')
-                    img['img_base64'] = f"data:image/jpeg;base64,{img_base64}"
+                    # Определяем правильный MIME тип
+                    file_type = img.get('type', 'image/jpeg')
+                    img['img_base64'] = f"data:{file_type};base64,{img_base64}"
+                    img['file_type'] = file_type
                     # Удаляем blob из ответа (чтобы не передавать большие данные)
                     img['img'] = None
         

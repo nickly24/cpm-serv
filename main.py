@@ -1146,6 +1146,15 @@ def create_zap_route():
                 "error": "student_id и text обязательны"
             }), 400
         
+        # Приводим student_id к int
+        try:
+            student_id = int(student_id)
+        except (ValueError, TypeError):
+            return jsonify({
+                "status": False,
+                "error": "student_id должен быть числом"
+            }), 400
+        
         # Преобразуем base64 изображения в blob
         images_blob = []
         for img_base64 in images_base64:
@@ -1201,12 +1210,24 @@ def get_zaps_student_route():
                 "error": "student_id обязателен"
             }), 400
         
+        # Приводим к int
+        try:
+            student_id = int(student_id)
+        except (ValueError, TypeError):
+            return jsonify({
+                "status": False,
+                "error": "student_id должен быть числом"
+            }), 400
+        
         result = get_zaps_by_student(student_id)
         
         http_code = 200 if result.get('status') else 400
         return jsonify(result), http_code
         
     except Exception as e:
+        print(f"Ошибка в get_zaps_student_route: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "status": False,
             "error": f"Внутренняя ошибка сервера: {str(e)}"

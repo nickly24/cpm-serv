@@ -1,7 +1,16 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_cors import CORS
 from auth import auth
 from aun import aun
+from jwt_auth import (
+    generate_token, 
+    require_auth, 
+    require_role, 
+    require_self_or_role,
+    set_auth_cookie, 
+    clear_auth_cookie,
+    get_current_user
+)
 from student_group_filter import get_student_ids_and_names_by_group
 from get_homeworks import get_homeworks
 from get_homework_sessions_bygroupid import get_proctor_homework_sessions
@@ -48,7 +57,8 @@ CORS(app, resources={
         ],  # Только разрешенные домены
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
+        "supports_credentials": True,  # Важно для работы с cookies
+        "expose_headers": ["Content-Type"]
     }
 })
 
@@ -60,26 +70,94 @@ def hello_world():
     """
     return jsonify({"answer": "hello world!"})
 
-@app.route("/api/auth",methods = ['POST'])
+@app.route("/api/auth", methods=['POST'])
 def auth_route():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    body_login = data.get('login')  # Получаем значение ключа 'login'
-    body_password = data.get('password')  # Получаем значение ключа 'password'
-    answer = auth(body_login,body_password)
-    return jsonify(answer)
+    """
+    Авторизация пользователя
+    Выдает JWT токен в HTTP-only cookie
+    """
+    data = request.get_json()
+    body_login = data.get('login')
+    body_password = data.get('password')
+    
+    if not body_login or not body_password:
+        return jsonify({
+            'status': False,
+            'error': 'Логин и пароль обязательны'
+        }), 400
+    
+    # Проверяем авторизацию
+    answer = auth(body_login, body_password)
+    
+    # Если авторизация неуспешна
+    if not answer.get('status') and not answer.get('sratus'):
+        return jsonify({
+            'status': False,
+            'error': 'Неверный логин или пароль'
+        }), 401
+    
+    # Получаем данные пользователя (исправляем опечатку 'sratus' -> 'status')
+    user_data = answer.get('res', {})
+    
+    if not user_data:
+        return jsonify({
+            'status': False,
+            'error': 'Ошибка получения данных пользователя'
+        }), 500
+    
+    # Генерируем JWT токен
+    token = generate_token(user_data)
+    
+    # Создаем response
+    response = make_response(jsonify({
+        'status': True,
+        'message': 'Авторизация успешна',
+        'user': user_data
+    }))
+    
+    # Устанавливаем токен в HTTP-only cookie
+    response = set_auth_cookie(response, token)
+    
+    return response
 
-@app.route("/api/aun",methods = ['POST'])
-def aun_route():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    role = data.get('role')  # Получаем значение ключа 'login'
-    id = data.get('id')  # Получаем значение ключа 'password'
-    answer = aun(role,id)
-    return jsonify(answer)
+@app.route("/api/logout", methods=['POST'])
+def logout_route():
+    """
+    Выход пользователя
+    Удаляет JWT токен из cookie
+    """
+    response = make_response(jsonify({
+        'status': True,
+        'message': 'Выход выполнен успешно'
+    }))
+    
+    # Удаляем токен из cookie
+    response = clear_auth_cookie(response)
+    
+    return response
 
-@app.route("/api/student-group-filter",methods = ['POST'])
-def student_group_filter():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    id = data.get('id')  # Получаем значение ключа 'password'
+
+@app.route("/api/aun", methods=['POST'])
+@require_auth
+def aun_route(current_user=None):
+    """
+    Получение данных текущего авторизованного пользователя
+    Теперь использует JWT токен из cookie
+    """
+    # Возвращаем данные текущего пользователя из токена
+    return jsonify({
+        'status': True,
+        'role': current_user.get('role'),
+        'entity_id': current_user.get('id'),
+        'full_name': current_user.get('full_name'),
+        'group_id': current_user.get('group_id')
+    })
+
+@app.route("/api/student-group-filter", methods=['POST'])
+@require_role('admin', 'proctor')
+def student_group_filter(current_user=None):
+    data = request.get_json()
+    id = data.get('id')
     answer = get_student_ids_and_names_by_group(id)
     return jsonify(answer)
 
@@ -87,20 +165,23 @@ def student_group_filter():
 def gethomeworks():
     return jsonify(get_homeworks())
 
-@app.route("/api/get-homework-sessions",methods = ['POST'])
-def ghs():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
+@app.route("/api/get-homework-sessions", methods=['POST'])
+@require_role('proctor')
+def ghs(current_user=None):
+    data = request.get_json()
     proctor_id = data.get('proctorId') 
     homework_id = data.get('homeworkId') 
-    answer =get_proctor_homework_sessions(proctor_id,homework_id)
+    answer = get_proctor_homework_sessions(proctor_id, homework_id)
     return jsonify(answer)
 
 @app.route("/api/pass_homework", methods=['POST'])
-def pass_hw():
+@require_role('proctor')
+def pass_hw(current_user=None):
     """
+    Оценивает домашнее задание
     Получает дату из HTTP запроса в формате YYYY-MM-DD и возвращает данные.
     """
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
+    data = request.get_json()
     session_id = data.get('sessionId')
     date_pass = data.get('datePass')
     student_id = data.get('studentId')
@@ -125,15 +206,17 @@ def pass_hw():
     return jsonify(answer)
 
 
-@app.route("/api/get-homeworks-student",methods = ['POST'])
-def ghst():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
+@app.route("/api/get-homeworks-student", methods=['POST'])
+@require_self_or_role('studentId', 'proctor')
+def ghst(current_user=None):
+    data = request.get_json()
     student_id = data.get('studentId') 
     answer = get_student_homework_dashboard(student_id)
     return jsonify(answer)
 
 @app.route("/api/get-all-homework-results", methods=['GET'])
-def get_all_hw_results():
+@require_role('admin')
+def get_all_hw_results(current_user=None):
     """
     Получить все домашние задания с результатами всех студентов
     Для админки - полная статистика по всем ДЗ
@@ -142,7 +225,8 @@ def get_all_hw_results():
     return jsonify(answer)
 
 @app.route("/api/get-homework-results-paginated", methods=['POST'])
-def get_hw_results_paginated():
+@require_role('admin')
+def get_hw_results_paginated(current_user=None):
     """
     Получить домашние задания с пагинацией
     Оптимизированная версия для больших объемов данных
@@ -171,7 +255,8 @@ def get_hw_results_paginated():
     return jsonify(answer)
 
 @app.route("/api/get-homework-students", methods=['POST'])
-def get_hw_students():
+@require_role('admin')
+def get_hw_students(current_user=None):
     """
     Получить студентов для конкретного домашнего задания с пагинацией
     """
@@ -207,7 +292,8 @@ def get_hw_students():
     return jsonify(answer)
 
 @app.route("/api/edit-homework-session", methods=['POST'])
-def edit_hw_session():
+@require_role('admin')
+def edit_hw_session(current_user=None):
     data = request.get_json()
     session_id = data.get('sessionId')
     result = data.get('result')
@@ -222,8 +308,9 @@ def edit_hw_session():
     http_code = 200 if answer.get('status') else 400
     return jsonify(answer), http_code
 
-@app.route("/api/create-homework",methods = ['POST'])
-def create_hw():
+@app.route("/api/create-homework", methods=['POST'])
+@require_role('admin')
+def create_hw(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     name = data.get('homeworkName') 
     typee = data.get('homeworkType') 
@@ -231,51 +318,64 @@ def create_hw():
     answer = create_homework_and_sessions(name,typee,deadline_str)
     return jsonify(answer)
     
-@app.route("/api/delete-homework",methods = ['POST'])
-def delete_hw():
+@app.route("/api/delete-homework", methods=['POST'])
+@require_role('admin')
+def delete_hw(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     homework_id = data.get('homeworkId')
     answer = delete_homework(homework_id) 
     return jsonify(answer)
 
-@app.route("/api/get-groups-students",methods = ['GET'])
-def get_groups_students():
+@app.route("/api/get-groups-students", methods=['GET'])
+@require_role('admin')
+def get_groups_students(current_user=None):
     answer = merge_groups_students_proctors()
     return jsonify(answer)
 
-@app.route("/api/get-unsigned-proctors-students",methods = ['GET'])
-def get_unsigned_p_s():
+@app.route("/api/get-groups", methods=['GET'])
+@require_role('admin')
+def get_g(current_user=None):
+    answer = get_all_groups()
+    return jsonify(answer)
+
+@app.route("/api/get-unsigned-proctors-students", methods=['GET'])
+@require_role('admin')
+def get_unsigned_p_s(current_user=None):
     answer = get_unassigned_students_and_proctors()
     return jsonify(answer)
 
 
-@app.route("/api/remove-groupd-id-student",methods = ['POST'])
-def remove_g_s():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    student_id= data.get('studentId')
-    answer = reset_group_for_user('student',student_id)
+@app.route("/api/remove-groupd-id-student", methods=['POST'])
+@require_role('admin')
+def remove_g_s(current_user=None):
+    data = request.get_json()
+    student_id = data.get('studentId')
+    answer = reset_group_for_user('student', student_id)
     return jsonify(answer)
 
 
-@app.route("/api/remove-groupd-id-proctor",methods = ['POST'])
-def remove_g_p():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    proctor_id= data.get('proctorId')
-    answer = reset_group_for_user('proctor',proctor_id)
+@app.route("/api/remove-groupd-id-proctor", methods=['POST'])
+@require_role('admin')
+def remove_g_p(current_user=None):
+    data = request.get_json()
+    proctor_id = data.get('proctorId')
+    answer = reset_group_for_user('proctor', proctor_id)
     return jsonify(answer)
 
 
-@app.route("/api/change-group-proctor",methods = ['POST'])
-def change_p():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    proctor_id= data.get('proctorId')
+@app.route("/api/change-group-proctor", methods=['POST'])
+@require_role('admin')
+def change_p(current_user=None):
+    data = request.get_json()
+    proctor_id = data.get('proctorId')
     group_id = data.get('groupId')
-    answer = assign_proctor_to_group(proctor_id,group_id)
+    answer = assign_proctor_to_group(proctor_id, group_id)
     return jsonify(answer)
 
 
-@app.route("/api/change-group-student",methods = ['POST'])
-def change_s():
+@app.route("/api/change-group-student", methods=['POST'])
+@require_role('admin')
+def change_s(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     student_id= data.get('studentId')
     group_id = data.get('groupId')
@@ -284,31 +384,28 @@ def change_s():
     return jsonify(answer)
 
 
-@app.route("/api/get-groups",methods = ['GET'])
-def get_g():
-    answer = get_all_groups()
-    return jsonify(answer)
-
-
-@app.route("/api/get-attendance-by-date",methods = ['POST'])
-def get_attendance_by_d():
+@app.route("/api/get-attendance-by-date", methods=['POST'])
+@require_role('admin')
+def get_attendance_by_d(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     date= data.get('date')
     answer = get_attendance_by_date(date)
     return jsonify(answer)
 
 
-@app.route("/api/get-attendance-by-month",methods = ['POST'])
-def get_attendance_by_m():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    month= data.get('month')
-    year= data.get('year')
-    answer = get_attendance_diary(year,month)
+@app.route("/api/get-attendance-by-month", methods=['POST'])
+@require_role('admin')
+def get_attendance_by_m(current_user=None):
+    data = request.get_json()
+    month = data.get('month')
+    year = data.get('year')
+    answer = get_attendance_diary(year, month)
     return jsonify(answer)
 
 
-@app.route("/api/add-attendance",methods = ['POST'])
-def add_attendance_f():
+@app.route("/api/add-attendance", methods=['POST'])
+@require_role('admin')
+def add_attendance_f(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     student_id= data.get('studentId')
     date= data.get('date')
@@ -316,16 +413,18 @@ def add_attendance_f():
     return jsonify(answer)
 
 
-@app.route("/api/get-users-by-role",methods = ['POST'])
-def get_users_br():
-    data = request.get_json()  # Получаем данные из тела запроса в формате JSON
-    role= data.get('role')
+@app.route("/api/get-users-by-role", methods=['POST'])
+@require_role('admin')
+def get_users_br(current_user=None):
+    data = request.get_json()
+    role = data.get('role')
     answer = get_users_by_role(role)
     return jsonify(answer)
 
 
-@app.route("/api/delete-user",methods = ['POST'])
-def del_us():
+@app.route("/api/delete-user", methods=['POST'])
+@require_role('admin')
+def del_us(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     role= data.get('role')
     user_id= data.get('userId')
@@ -334,13 +433,15 @@ def del_us():
 
 
 @app.route("/api/get-students")
-def get_us():
+@require_role('admin')
+def get_us(current_user=None):
     answer = get_all_students()
     return jsonify(answer)
 
 
 @app.route("/api/get-class-name-by-studID", methods=['POST'])
-def get_class_name_by_stud_id():
+@require_self_or_role('student_id', 'admin', 'proctor')
+def get_class_name_by_stud_id(current_user=None):
     """
     Получает информацию о студенте по ID
     Ожидает JSON: {"student_id": "123"}
@@ -360,7 +461,8 @@ def get_class_name_by_stud_id():
 
 
 @app.route("/api/add-student", methods=['POST'])
-def add_student_route():
+@require_role('admin')
+def add_student_route(current_user=None):
     """
     Добавляет нового студента с автоматической генерацией логина и пароля
     
@@ -409,7 +511,8 @@ def add_student_route():
 
 
 @app.route("/api/edit-student", methods=['PUT'])
-def edit_student_route():
+@require_role('admin')
+def edit_student_route(current_user=None):
     """
     Редактирует данные студента
     
@@ -525,7 +628,8 @@ def validate_student_by_tg_route():
 # }
 
 @app.route('/add-learned-question', methods=['POST'])
-def add_learned_question():
+@require_self_or_role('student_id', 'admin', 'proctor')
+def add_learned_question(current_user=None):
     connection = None
     cursor = None
     try:
@@ -616,7 +720,8 @@ def add_learned_question():
 
 #возвращает вообще все вопросы по теме и помечает те что уде изучены булиевой переменной - "is_learned": (true/false),
 @app.route('/all-cards-by-theme/<int:student_id>/<int:theme_id>', methods=['GET'])
-def get_cards_by_theme_with_progress(student_id, theme_id):
+@require_self_or_role('student_id', 'admin', 'proctor')
+def get_cards_by_theme_with_progress(student_id, theme_id, current_user=None):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -670,7 +775,8 @@ def get_cards_by_theme_with_progress(student_id, theme_id):
 
 #возвращает все карточки который пользователь еще не изучил
 @app.route('/cadrs-by-theme/<int:student_id>/<int:theme_id>', methods=['GET'])
-def get_cards_to_learn(student_id, theme_id):
+@require_self_or_role('student_id', 'admin', 'proctor')
+def get_cards_to_learn(student_id, theme_id, current_user=None):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -731,7 +837,8 @@ def get_cards_to_learn(student_id, theme_id):
 # }
 
 @app.route('/create-theme-with-questions', methods=['POST'])
-def create_theme_with_questions():
+@require_role('admin')
+def create_theme_with_questions(current_user=None):
     connection = None
     cursor = None
     try:
@@ -845,7 +952,8 @@ def get_all_themes():
 
 #возвращает выученные вопросы по конкретной теме
 @app.route('/learned-questions/<int:student_id>/<int:theme_id>', methods=['GET'])
-def get_learned_questions(student_id, theme_id):
+@require_self_or_role('student_id', 'admin', 'proctor')
+def get_learned_questions(student_id, theme_id, current_user=None):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -884,7 +992,8 @@ def get_learned_questions(student_id, theme_id):
 
 #убирает из изученных карточку
 @app.route('/remove-learned-question/<int:student_id>/<int:question_id>', methods=['DELETE'])
-def remove_learned_question(student_id, question_id):
+@require_self_or_role('student_id', 'admin', 'proctor')
+def remove_learned_question(student_id, question_id, current_user=None):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -950,7 +1059,8 @@ def remove_learned_question(student_id, question_id):
 # ============================================================================
 
 @app.route("/api/schedule", methods=['GET'])
-def get_schedule():
+@require_role('admin')
+def get_schedule(current_user=None):
     """
     Получить все занятия из расписания
     
@@ -990,7 +1100,8 @@ def get_schedule():
 
 
 @app.route("/api/schedule", methods=['POST'])
-def add_lesson():
+@require_role('admin')
+def add_lesson(current_user=None):
     """
     Добавить новое занятие в расписание
     
@@ -1036,7 +1147,8 @@ def add_lesson():
 
 
 @app.route("/api/schedule/<lesson_id>", methods=['PUT'])
-def edit_lesson(lesson_id):
+@require_role('admin')
+def edit_lesson(lesson_id, current_user=None):
     """
     Редактировать занятие в расписании
     
@@ -1083,7 +1195,8 @@ def edit_lesson(lesson_id):
 
 
 @app.route("/api/schedule/<lesson_id>", methods=['DELETE'])
-def delete_lesson(lesson_id):
+@require_role('admin')
+def delete_lesson(lesson_id, current_user=None):
     """
     Удалить занятие из расписания
     
@@ -1116,7 +1229,8 @@ def delete_lesson(lesson_id):
 # ============================================================================
 
 @app.route("/api/create-zap", methods=['POST'])
-def create_zap_route():
+@require_self_or_role('student_id', 'admin')
+def create_zap_route(current_user=None):
     """
     Создать запрос на отгул от студента
     
@@ -1190,7 +1304,8 @@ def create_zap_route():
 
 
 @app.route("/api/get-zaps-student", methods=['POST'])
-def get_zaps_student_route():
+@require_self_or_role('student_id', 'admin')
+def get_zaps_student_route(current_user=None):
     """
     Получить запросы на отгул студента
     
@@ -1241,7 +1356,8 @@ def get_zaps_student_route():
 
 
 @app.route("/api/get-all-zaps", methods=['GET'])
-def get_all_zaps_route():
+@require_role('admin')
+def get_all_zaps_route(current_user=None):
     """
     Получить все запросы на отгул (для админов)
     
@@ -1264,7 +1380,8 @@ def get_all_zaps_route():
 
 
 @app.route("/api/get-zap/<zap_id>", methods=['GET'])
-def get_zap_route(zap_id):
+@require_role('admin')
+def get_zap_route(zap_id, current_user=None):
     """
     Получить запрос на отгул по ID с изображениями
     
@@ -1296,7 +1413,8 @@ def get_zap_route(zap_id):
 
 
 @app.route("/api/process-zap", methods=['POST'])
-def process_zap_route():
+@require_role('admin')
+def process_zap_route(current_user=None):
     """
     Обработать запрос на отгул (одобрить/отклонить)
     При одобрении можно привязать к датам в посещаемости

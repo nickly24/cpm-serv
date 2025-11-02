@@ -86,11 +86,17 @@ def verify_token(token):
 
 def get_token_from_request():
     """
-    Получает JWT токен из HTTP-only cookie
+    Получает JWT токен из заголовка Authorization или из HTTP-only cookie
     
     Returns:
         str: JWT токен или None
     """
+    # Сначала пытаемся получить из заголовка Authorization
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        return auth_header.replace('Bearer ', '', 1)
+    
+    # Fallback на cookie для обратной совместимости
     return request.cookies.get('auth_token')
 
 

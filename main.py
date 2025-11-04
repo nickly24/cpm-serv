@@ -292,7 +292,7 @@ def get_hw_students(current_user=None):
     return jsonify(answer)
 
 @app.route("/api/edit-homework-session", methods=['POST'])
-@require_role('admin')
+@require_role('admin', 'proctor')
 def edit_hw_session(current_user=None):
     data = request.get_json()
     session_id = data.get('sessionId')

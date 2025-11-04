@@ -39,13 +39,30 @@ def edit_homework_session(session_id, result=None, date_pass=None, status=None):
         if date_pass is not None:
             # Поддержка str в ISO формате или datetime/date
             if isinstance(date_pass, str):
+                date_val = None
+                # Пробуем разные форматы
+                formats = [
+                    "%Y-%m-%d",      # 2025-10-30 (стандартный ISO)
+                    "%Y-%m-%dT%H:%M:%S",  # 2025-10-30T00:00:00
+                    "%Y-%m-%d %H:%M:%S",  # 2025-10-30 00:00:00
+                    "%d.%m.%Y",      # 30.10.2025
+                    "%d/%m/%Y",      # 30/10/2025
+                ]
+                
+                # Сначала пробуем ISO формат
                 try:
-                    date_val = date.fromisoformat(date_pass)
-                except ValueError:
-                    try:
-                        date_val = datetime.strptime(date_pass, "%Y-%m-%d").date()
-                    except ValueError:
-                        return {"status": False, "error": "invalid_date_pass"}
+                    date_val = date.fromisoformat(date_pass.split('T')[0])
+                except (ValueError, AttributeError):
+                    # Пробуем другие форматы
+                    for fmt in formats:
+                        try:
+                            date_val = datetime.strptime(date_pass, fmt).date()
+                            break
+                        except ValueError:
+                            continue
+                
+                if date_val is None:
+                    return {"status": False, "error": f"invalid_date_pass: не удалось распарсить дату '{date_pass}'"}
             elif isinstance(date_pass, datetime):
                 date_val = date_pass.date()
             elif isinstance(date_pass, date):

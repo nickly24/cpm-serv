@@ -1059,7 +1059,7 @@ def remove_learned_question(student_id, question_id, current_user=None):
 # ============================================================================
 
 @app.route("/api/schedule", methods=['GET'])
-@require_role('admin')
+@require_role('admin', 'student')
 def get_schedule(current_user=None):
     """
     Получить все занятия из расписания

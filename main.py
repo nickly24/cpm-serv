@@ -42,6 +42,7 @@ from validate_student_by_tg import validate_student_by_tg_name
 from schedule_manager import ScheduleManager
 from get_all_homework_results import get_all_homework_results
 from get_homework_results_paginated import get_homework_results_paginated, get_homework_students
+from get_ov_homework_table import get_ov_homework_table
 from create_zap import create_zap
 from get_zaps import get_zaps_by_student, get_all_zaps, get_zap_by_id
 from process_zap import process_zap
@@ -324,6 +325,16 @@ def delete_hw(current_user=None):
     data = request.get_json()  # Получаем данные из тела запроса в формате JSON
     homework_id = data.get('homeworkId')
     answer = delete_homework(homework_id) 
+    return jsonify(answer)
+
+@app.route("/api/get-ov-homework-table", methods=['GET'])
+@require_role('admin', 'supervisor')
+def get_ov_homework_table_route(current_user=None):
+    """
+    Получает таблицу данных по домашним заданиям типа ОВ
+    Доступен для администраторов и супервайзеров
+    """
+    answer = get_ov_homework_table()
     return jsonify(answer)
 
 @app.route("/api/get-groups-students", methods=['GET'])

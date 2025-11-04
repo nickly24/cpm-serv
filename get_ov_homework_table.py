@@ -1,6 +1,6 @@
 """
-Модуль для получения таблицы данных по домашним заданиям типа ОВ
-Возвращает данные в формате: студенты и их результаты по всем ОВ домашкам
+Модуль для получения таблицы данных по домашним заданиям типов ОВ и ДЗНВ
+Возвращает данные в формате: студенты и их результаты по всем домашкам
 """
 
 import mysql.connector
@@ -10,7 +10,7 @@ from db import db
 
 def get_ov_homework_table():
     """
-    Получает таблицу данных по домашним заданиям типа ОВ
+    Получает таблицу данных по домашним заданиям типов ОВ и ДЗНВ
     Возвращает данные в формате:
     {
         "homeworks": [
@@ -51,7 +51,7 @@ def get_ov_homework_table():
     cursor = connection.cursor(dictionary=True)
 
     try:
-        # Получаем все домашние задания типа ОВ, отсортированные по дедлайну
+        # Получаем все домашние задания типов ОВ и ДЗНВ, отсортированные по дедлайну (новые сначала)
         homework_query = """
             SELECT 
                 h.id,
@@ -59,8 +59,8 @@ def get_ov_homework_table():
                 h.type,
                 h.deadline
             FROM homework h
-            WHERE h.type = 'ОВ'
-            ORDER BY h.deadline ASC
+            WHERE h.type IN ('ОВ', 'ДЗНВ')
+            ORDER BY h.deadline DESC
         """
         
         cursor.execute(homework_query)
@@ -127,8 +127,8 @@ def get_ov_homework_table():
                         END as days_overdue
                     FROM homework h
                     LEFT JOIN homework_sessions hs ON h.id = hs.homework_id AND hs.student_id = %s
-                    WHERE h.type = 'ОВ' AND h.id IN ({placeholders})
-                    ORDER BY h.deadline ASC
+                    WHERE h.type IN ('ОВ', 'ДЗНВ') AND h.id IN ({placeholders})
+                    ORDER BY h.deadline DESC
                 """
                 
                 cursor.execute(results_query, [student_id] + homework_ids)

@@ -328,7 +328,7 @@ def delete_hw(current_user=None):
     return jsonify(answer)
 
 @app.route("/api/get-ov-homework-table", methods=['GET'])
-@require_role('admin', 'supervisor')
+@require_role('admin', 'supervisor', 'proctor')
 def get_ov_homework_table_route(current_user=None):
     """
     Получает таблицу данных по домашним заданиям типа ОВ

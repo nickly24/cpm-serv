@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 import calendar
 import datetime
 
@@ -21,16 +20,10 @@ def get_attendance_diary(year: str, month: str):
         weekday = calendar.weekday(year_int, month_int, day)
         days_list.append({'day': day, 'weekday': weekday})
 
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Получаем всех студентов
         cursor.execute("SELECT id, full_name FROM students ORDER BY full_name ASC")
         students = cursor.fetchall()
@@ -97,8 +90,9 @@ def get_attendance_diary(year: str, month: str):
 
         return {'status': True, 'res': {'days': formatted_days, 'students': students_report}}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         return {'status': False, 'error': str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

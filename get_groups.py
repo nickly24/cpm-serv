@@ -1,16 +1,11 @@
-import mysql.connector
-from db import db
-def get_all_groups():
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
+from db_pool import get_db_connection, close_db_connection
 
+def get_all_groups():
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
         cursor.execute('''SELECT id, name FROM `groups` ORDER BY name ASC''')
         groups = cursor.fetchall()
 
@@ -21,10 +16,11 @@ def get_all_groups():
 
         return {"status": True, "res": groups_list}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": []}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

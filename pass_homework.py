@@ -1,17 +1,11 @@
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 import datetime
-from db import db
-def pass_homework(session_id, date_pass, student_id=None, homework_id=None):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
 
+def pass_homework(session_id, date_pass, student_id=None, homework_id=None):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # 1. Получаем homework_id - либо из session_id, либо напрямую
         if session_id:
             cursor.execute("SELECT homework_id, student_id FROM homework_sessions WHERE id = %s", (session_id,))
@@ -69,12 +63,14 @@ def pass_homework(session_id, date_pass, student_id=None, homework_id=None):
         print(f"Оценка выставлена: {result} баллов")
         return {"status": True, "result": result}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
-        connection.rollback()
+        if connection:
+            connection.rollback()
         return {"status": False}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 

@@ -1,16 +1,11 @@
-import mysql.connector
-from db import db
-def get_student_homework_dashboard(student_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
+from db_pool import get_db_connection, close_db_connection
 
+def get_student_homework_dashboard(student_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
         # Получаем все домашние задания
         cursor.execute("SELECT id, name, type, deadline FROM homework")
         homeworks = cursor.fetchall()
@@ -51,12 +46,13 @@ def get_student_homework_dashboard(student_id):
 
         return {"status": True, "res": result_list}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": []}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 
 

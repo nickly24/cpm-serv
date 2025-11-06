@@ -1,18 +1,11 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 import datetime
 
 def add_attendance(student_id, date_str, attendance_rate=1, zap_id=None):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor()
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         # Проверим существует ли студент
         cursor.execute("SELECT id, full_name FROM students WHERE id = %s", (student_id,))
         student = cursor.fetchone()
@@ -47,9 +40,10 @@ def add_attendance(student_id, date_str, attendance_rate=1, zap_id=None):
 
         return {"status": True}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

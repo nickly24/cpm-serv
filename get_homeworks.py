@@ -1,17 +1,11 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def get_homeworks():
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
         query = "SELECT id, name, type, deadline FROM homework ORDER BY deadline DESC"
         cursor.execute(query)
         results = cursor.fetchall()
@@ -30,9 +24,10 @@ def get_homeworks():
 
         return {"status": True, "res": homework_list}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": []}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

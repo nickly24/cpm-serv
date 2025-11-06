@@ -93,11 +93,21 @@ def get_token_from_request():
     """
     # Сначала пытаемся получить из заголовка Authorization
     auth_header = request.headers.get('Authorization', '')
-    if auth_header.startswith('Bearer '):
-        return auth_header.replace('Bearer ', '', 1)
+    if auth_header:
+        if auth_header.startswith('Bearer '):
+            token = auth_header.replace('Bearer ', '', 1)
+            if token:
+                return token
+        # Попробуем без префикса Bearer (на случай если токен уже без префикса)
+        elif auth_header.strip():
+            return auth_header.strip()
     
     # Fallback на cookie для обратной совместимости
-    return request.cookies.get('auth_token')
+    cookie_token = request.cookies.get('auth_token')
+    if cookie_token:
+        return cookie_token
+    
+    return None
 
 
 def get_current_user():

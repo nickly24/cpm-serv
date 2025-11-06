@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def get_student_by_id(student_id):
     """
@@ -11,16 +10,11 @@ def get_student_by_id(student_id):
     Returns:
         dict: Информация о студенте
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
         cursor.execute("""
             SELECT id, full_name, group_id, class, tg_name 
             FROM students 
@@ -42,9 +36,10 @@ def get_student_by_id(student_id):
         
         return {"status": True, "data": result}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

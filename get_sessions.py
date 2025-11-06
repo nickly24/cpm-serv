@@ -1,18 +1,10 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def get_all_exams():
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        database=db.db
-    )
-    
-    cursor = connection.cursor(dictionary=True)
-    
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Получаем все экзамены
         cursor.execute("SELECT id, name, date FROM exams")
         exams = cursor.fetchall()
@@ -86,8 +78,10 @@ def get_all_exams():
             result.append(exam_data)
         
         return result
-        
+    except Exception as e:
+        print(f"Ошибка при получении экзаменов: {e}")
+        return []
     finally:
-        cursor.close()
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

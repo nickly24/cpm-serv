@@ -1,16 +1,10 @@
-import mysql.connector
-from db import db
-def get_proctor_homework_sessions(proctor_id, homework_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
+from db_pool import get_db_connection, close_db_connection
 
+def get_proctor_homework_sessions(proctor_id, homework_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # 1. Получаем group_id проектора
         cursor.execute("SELECT group_id FROM proctors WHERE id = %s", (proctor_id,))
         proctor = cursor.fetchone()
@@ -64,12 +58,13 @@ def get_proctor_homework_sessions(proctor_id, homework_id):
 
         return {"status": True, "res": result_with_names}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": []}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 # === ПРИМЕР ===
 if __name__ == "__main__":

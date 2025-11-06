@@ -1,16 +1,10 @@
-import mysql.connector
-from db import db
-def reset_group_for_user(user_type, user_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor()
+from db_pool import get_db_connection, close_db_connection
 
+def reset_group_for_user(user_type, user_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         if user_type == "student":
             query = "UPDATE students SET group_id = NULL WHERE id = %s"
         elif user_type == "proctor":
@@ -27,9 +21,10 @@ def reset_group_for_user(user_type, user_id):
 
         return {"status": True}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

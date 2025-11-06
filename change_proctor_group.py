@@ -1,16 +1,10 @@
-import mysql.connector
-from db import db
-def assign_proctor_to_group(proctor_id, group_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor()
+from db_pool import get_db_connection, close_db_connection
 
+def assign_proctor_to_group(proctor_id, group_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         # Проверим существует ли группа
         cursor.execute('''SELECT id FROM `groups` WHERE id = %s''', (group_id,))
         group = cursor.fetchone()
@@ -31,9 +25,10 @@ def assign_proctor_to_group(proctor_id, group_id):
 
         return {"status": True}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

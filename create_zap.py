@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 from datetime import datetime
 
 def create_zap(student_id, text, images=None):
@@ -14,16 +13,10 @@ def create_zap(student_id, text, images=None):
     Returns:
         dict: Результат создания с zap_id
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor()
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         # Проверяем существование студента
         cursor.execute("SELECT id, full_name FROM students WHERE id = %s", (student_id,))
         student = cursor.fetchone()
@@ -55,10 +48,12 @@ def create_zap(student_id, text, images=None):
             "message": "Запрос успешно создан"
         }
 
-    except mysql.connector.Error as err:
-        connection.rollback()
+    except Exception as err:
+        if connection:
+            connection.rollback()
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

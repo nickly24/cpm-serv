@@ -3,9 +3,8 @@
 Возвращает данные в формате: студенты и их результаты по всем домашкам
 """
 
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 import datetime
-from db import db
 
 
 def get_ov_homework_table():
@@ -41,16 +40,10 @@ def get_ov_homework_table():
         ]
     }
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Получаем все домашние задания типов ОВ и ДЗНВ, отсортированные по дедлайну (новые сначала)
         homework_query = """
             SELECT 
@@ -192,7 +185,7 @@ def get_ov_homework_table():
             "students": students
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {
             "status": False,
@@ -202,6 +195,6 @@ def get_ov_homework_table():
         }
 
     finally:
-        cursor.close()
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

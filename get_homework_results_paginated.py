@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def get_homework_results_paginated(page=1, limit=10, filters=None):
     """
@@ -11,16 +10,10 @@ def get_homework_results_paginated(page=1, limit=10, filters=None):
         limit: количество заданий на странице
         filters: словарь с фильтрами
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Базовые фильтры
         where_conditions = []
         params = []
@@ -159,28 +152,23 @@ def get_homework_results_paginated(page=1, limit=10, filters=None):
             }
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": [], "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 
 def get_homework_students(homework_id, page=1, limit=50, filters=None):
     """
     Получает студентов для конкретного домашнего задания с пагинацией
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Базовые фильтры для студентов
         where_conditions = ["h.id = %s"]
         params = [homework_id]
@@ -262,9 +250,10 @@ def get_homework_students(homework_id, page=1, limit=50, filters=None):
             }
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": [], "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

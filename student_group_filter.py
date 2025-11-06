@@ -1,16 +1,10 @@
-import mysql.connector
-from db import db
-def get_student_ids_and_names_by_group(group_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
+from db_pool import get_db_connection, close_db_connection
 
+def get_student_ids_and_names_by_group(group_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         query = "SELECT id, full_name FROM students WHERE group_id = %s"
         cursor.execute(query, (group_id,))
         results = cursor.fetchall()
@@ -21,9 +15,10 @@ def get_student_ids_and_names_by_group(group_id):
         data = [{"id": row['id'], "full_name": row['full_name']} for row in results]
         return {"status": True, "res": data}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": []}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

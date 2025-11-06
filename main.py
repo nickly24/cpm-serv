@@ -33,8 +33,7 @@ from delete_user import delete_user
 from get_sessions import get_all_exams
 from get_students import get_all_students
 from get_student_by_id import get_student_by_id
-from db_connect import get_db_connection
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 from edit_homework_session import edit_homework_session
 from add_student import add_student
 from edit_student import edit_student
@@ -703,16 +702,6 @@ def add_learned_question(current_user=None):
             "theme_id": theme_id
         }), 201
 
-    except mysql.connector.Error as e:
-        if connection:
-            connection.rollback()
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "student_id": student_id,
-            "question_id": question_id
-        }), 500
-
     except Exception as e:
         if connection:
             connection.rollback()
@@ -723,10 +712,8 @@ def add_learned_question(current_user=None):
         }), 500
 
     finally:
-        if cursor:
-            cursor.close()
         if connection:
-            connection.close()
+            close_db_connection(connection)
 
 
 #возвращает вообще все вопросы по теме и помечает те что уде изучены булиевой переменной - "is_learned": (true/false),
@@ -755,9 +742,6 @@ def get_cards_by_theme_with_progress(student_id, theme_id, current_user=None):
         for card in all_cards:
             card['is_learned'] = card['id'] in learned_card_ids
 
-        cursor.close()
-        connection.close()
-
         return jsonify({
             "success": True,
             "student_id": student_id,
@@ -768,20 +752,15 @@ def get_cards_by_theme_with_progress(student_id, theme_id, current_user=None):
             "remaining_cards": len(all_cards) - len(learned_card_ids)
         })
 
-    except mysql.connector.Error as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "student_id": student_id,
-            "theme_id": theme_id
-        }), 500
-
     except Exception as e:
         return jsonify({
             "success": False,
             "error": "Internal server error",
             "details": str(e)
         }), 500
+    finally:
+        if connection:
+            close_db_connection(connection)
 
 
 #возвращает все карточки который пользователь еще не изучил
@@ -807,9 +786,6 @@ def get_cards_to_learn(student_id, theme_id, current_user=None):
         cursor.execute(query, (theme_id, student_id))
         
         cards_to_learn = cursor.fetchall()
-        
-        cursor.close()
-        connection.close()
 
         return jsonify({
             "success": True,
@@ -819,20 +795,15 @@ def get_cards_to_learn(student_id, theme_id, current_user=None):
             "count": len(cards_to_learn)
         })
 
-    except mysql.connector.Error as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "student_id": student_id,
-            "theme_id": theme_id
-        }), 500
-
     except Exception as e:
         return jsonify({
             "success": False,
             "error": "Internal server error",
             "details": str(e)
         }), 500
+    finally:
+        if connection:
+            close_db_connection(connection)
     
 
 #можно добавлять неограниченное колличество карточек на тему, если темы не существует то создает эту тему и под новый id добавляет вопросы
@@ -917,14 +888,6 @@ def create_theme_with_questions(current_user=None):
             "questions_count": len(added_questions)
         })
 
-    except mysql.connector.Error as e:
-        if connection:
-            connection.rollback()
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
     except Exception as e:
         if connection:
             connection.rollback()
@@ -935,10 +898,8 @@ def create_theme_with_questions(current_user=None):
         }), 500
 
     finally:
-        if cursor:
-            cursor.close()
         if connection:
-            connection.close()
+            close_db_connection(connection)
 
 
 #возвращает все темы
@@ -949,8 +910,6 @@ def get_all_themes():
         cursor = connection.cursor(dictionary=True, buffered=True)
         cursor.execute("SELECT * FROM card_themes")
         themes = cursor.fetchall() 
-        cursor.close()
-        connection.close()
         
         # Возвращаем результат в формате JSON
         return jsonify(themes)
@@ -959,6 +918,9 @@ def get_all_themes():
             "success": False,
             "error": str(e)
         }), 500
+    finally:
+        if connection:
+            close_db_connection(connection)
     
 
 #возвращает выученные вопросы по конкретной теме
@@ -980,9 +942,6 @@ def get_learned_questions(student_id, theme_id, current_user=None):
         cursor.execute(query, (student_id, theme_id))
         
         learned_questions = cursor.fetchall()
-        
-        cursor.close()
-        connection.close()
 
         return jsonify({
             "success": True,
@@ -992,13 +951,15 @@ def get_learned_questions(student_id, theme_id, current_user=None):
             "count": len(learned_questions)
         })
 
-    except mysql.connector.Error as e:
+    except Exception as e:
         return jsonify({
             "success": False,
-            "error": str(e),
-            "student_id": student_id,
-            "theme_id": theme_id
+            "error": "Internal server error",
+            "details": str(e)
         }), 500
+    finally:
+        if connection:
+            close_db_connection(connection)
 
 
 #убирает из изученных карточку
@@ -1017,8 +978,6 @@ def remove_learned_question(student_id, question_id, current_user=None):
         cursor.execute(check_query, (student_id, question_id))
         
         if not cursor.fetchone():
-            cursor.close()
-            connection.close()
             return jsonify({
                 "success": False,
                 "message": "Record not found",
@@ -1035,9 +994,6 @@ def remove_learned_question(student_id, question_id, current_user=None):
         connection.commit()
         
         affected_rows = cursor.rowcount
-        
-        cursor.close()
-        connection.close()
 
         return jsonify({
             "success": True,
@@ -1047,22 +1003,17 @@ def remove_learned_question(student_id, question_id, current_user=None):
             "affected_rows": affected_rows
         })
 
-    except mysql.connector.Error as e:
-        connection.rollback()
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "student_id": student_id,
-            "question_id": question_id
-        }), 500
-
     except Exception as e:
-        connection.rollback()
+        if connection:
+            connection.rollback()
         return jsonify({
             "success": False,
             "error": "Internal server error",
             "details": str(e)
         }), 500
+    finally:
+        if connection:
+            close_db_connection(connection)
 
 
 # ============================================================================

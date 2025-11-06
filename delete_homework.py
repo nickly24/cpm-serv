@@ -1,16 +1,11 @@
-import mysql.connector
-from db import db
-def delete_homework(homework_id):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor()
+from db_pool import get_db_connection, close_db_connection
 
+def delete_homework(homework_id):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
         # Удаляем все записи в homework_sessions для этого домашнего задания
         delete_sessions_query = "DELETE FROM homework_sessions WHERE homework_id = %s"
         cursor.execute(delete_sessions_query, (homework_id,))
@@ -24,10 +19,12 @@ def delete_homework(homework_id):
         print(f"Домашнее задание с id {homework_id} успешно удалено вместе со всеми сессиями.")
         return {"status": True}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
-        connection.rollback()
+        if connection:
+            connection.rollback()
         return {"status": False}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

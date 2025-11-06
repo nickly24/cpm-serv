@@ -1,19 +1,12 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 from datetime import datetime, date
 
 
 def edit_homework_session(session_id, result=None, date_pass=None, status=None):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Проверяем, что сессия существует
         cursor.execute("SELECT * FROM homework_sessions WHERE id = %s", (session_id,))
         session = cursor.fetchone()
@@ -125,10 +118,12 @@ def edit_homework_session(session_id, result=None, date_pass=None, status=None):
             "date_pass": updated_session["date_pass"] if updated_session else None
         }
 
-    except mysql.connector.Error as err:
-        connection.rollback()
+    except Exception as err:
+        if connection:
+            connection.rollback()
         return {"status": False, "error": str(err)}
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 

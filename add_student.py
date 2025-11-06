@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 import random
 import string
 
@@ -16,8 +15,6 @@ def add_student(full_name, class_number, tg_name=None):
         dict: Результат операции с данными студента
     """
     connection = None
-    cursor = None
-    
     try:
         # Проверяем корректность класса
         if class_number not in [9, 10, 11]:
@@ -26,14 +23,8 @@ def add_student(full_name, class_number, tg_name=None):
                 "error": "Класс должен быть 9, 10 или 11"
             }
         
-        # Подключаемся к базе данных
-        connection = mysql.connector.connect(
-            host=db.host,
-            port=db.port,
-            user=db.user,
-            password=db.password,
-            db=db.db
-        )
+        # Получаем подключение из пула
+        connection = get_db_connection()
         cursor = connection.cursor()
         
         # Генерируем логин на основе имени и класса
@@ -96,7 +87,7 @@ def add_student(full_name, class_number, tg_name=None):
             }
         }
         
-    except mysql.connector.Error as e:
+    except Exception as e:
         if connection:
             connection.rollback()
         return {
@@ -104,16 +95,6 @@ def add_student(full_name, class_number, tg_name=None):
             "error": f"Ошибка базы данных: {str(e)}"
         }
         
-    except Exception as e:
-        if connection:
-            connection.rollback()
-        return {
-            "status": False,
-            "error": f"Внутренняя ошибка сервера: {str(e)}"
-        }
-        
     finally:
-        if cursor:
-            cursor.close()
         if connection:
-            connection.close()
+            close_db_connection(connection)

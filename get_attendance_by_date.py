@@ -1,17 +1,11 @@
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 import datetime
-from db import db
-def get_attendance_by_date(date_str):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor(dictionary=True)
 
+def get_attendance_by_date(date_str):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Преобразуем строку в дату (ожидаем формат YYYY-MM-DD)
         date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
 
@@ -42,9 +36,10 @@ def get_attendance_by_date(date_str):
         print("Неверный формат даты. Ожидается YYYY-MM-DD.")
         return {"status": False, "res": [], "error": "Invalid date format"}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
         return {"status": False, "res": [], "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

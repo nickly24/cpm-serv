@@ -1,29 +1,23 @@
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 
 def delete_user(role, user_id):
-    connection = mysql.connector.connect(
-        host="147.45.138.77",
-        port=3306,
-        user="minishep",
-        password="qwerty!1",
-        db="minishep"
-    )
-    cursor = connection.cursor()
-
-    user_tables = {
-        'student': 'students',
-        'proctor': 'proctors',
-        'admin': 'admins',
-        'examinator': 'examinators',
-        'supervisor': 'supervisors'
-    }
-
-    if role not in user_tables:
-        connection.close()
-        print("Ошибка: Неверная роль.")
-        return
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        user_tables = {
+            'student': 'students',
+            'proctor': 'proctors',
+            'admin': 'admins',
+            'examinator': 'examinators',
+            'supervisor': 'supervisors'
+        }
+
+        if role not in user_tables:
+            print("Ошибка: Неверная роль.")
+            return {"status": False, "error": "Неверная роль"}
+
         # Удаляем из сущности
         table_name = user_tables[role]
         delete_entity_query = f"DELETE FROM {table_name} WHERE id = %s"
@@ -36,10 +30,14 @@ def delete_user(role, user_id):
         connection.commit()
 
         print(f"Пользователь с ролью '{role}' и id '{user_id}' успешно удалён.")
+        return {"status": True}
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
-        connection.rollback()
+        if connection:
+            connection.rollback()
+        return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)

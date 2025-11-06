@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def validate_student_by_tg_name(tg_name):
     """
@@ -12,8 +11,6 @@ def validate_student_by_tg_name(tg_name):
         dict: Результат проверки с данными студента (ФИО, класс, группа, логин, пароль), если найден
     """
     connection = None
-    cursor = None
-    
     try:
         if not tg_name or tg_name.strip() == "":
             return {
@@ -21,14 +18,8 @@ def validate_student_by_tg_name(tg_name):
                 "error": "Telegram никнейм не может быть пустым"
             }
         
-        # Подключаемся к базе данных
-        connection = mysql.connector.connect(
-            host=db.host,
-            port=db.port,
-            user=db.user,
-            password=db.password,
-            db=db.db
-        )
+        # Получаем подключение из пула
+        connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         # Ищем студента по tg_name с получением логина и пароля из auth_users
@@ -62,21 +53,13 @@ def validate_student_by_tg_name(tg_name):
             }
         }
         
-    except mysql.connector.Error as e:
+    except Exception as e:
         return {
             "status": False,
             "error": f"Ошибка базы данных: {str(e)}"
         }
         
-    except Exception as e:
-        return {
-            "status": False,
-            "error": f"Внутренняя ошибка сервера: {str(e)}"
-        }
-        
     finally:
-        if cursor:
-            cursor.close()
         if connection:
-            connection.close()
+            close_db_connection(connection)
 

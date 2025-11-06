@@ -1,17 +1,11 @@
-import mysql.connector
+from db_pool import get_db_connection, close_db_connection
 import datetime
-from db import db
-def create_homework_and_sessions(homework_name, homework_type, deadline_str):
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        db=db.db,
-        password=db.password
-    )
-    cursor = connection.cursor()
 
+def create_homework_and_sessions(homework_name, homework_type, deadline_str):
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         # Преобразуем строку в дату
         # Ожидаем, что строка приходит в формате 'YYYY-MM-DD' (стандартный формат для HTML input type="date")
         deadline = datetime.datetime.strptime(deadline_str, "%Y-%m-%d").date()
@@ -42,13 +36,17 @@ def create_homework_and_sessions(homework_name, homework_type, deadline_str):
         connection.commit()
 
         print(f"Созданы сессии для всех студентов.")
+        return {'status': True}
 
     except ValueError:
         print("Ошибка формата даты. Ожидается строка в формате YYYY-MM-DD.")
-    except mysql.connector.Error as err:
+        return {'status': False, 'error': 'Неверный формат даты'}
+    except Exception as err:
         print(f"Ошибка базы данных: {err}")
-        connection.rollback()
+        if connection:
+            connection.rollback()
+        return {'status': False, 'error': str(err)}
 
     finally:
-        connection.close()
-        return {'status': True}
+        if connection:
+            close_db_connection(connection)

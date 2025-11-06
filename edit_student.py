@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def edit_student(student_id, full_name=None, class_number=None, group_id=None, tg_name=None):
     """
@@ -16,8 +15,6 @@ def edit_student(student_id, full_name=None, class_number=None, group_id=None, t
         dict: Результат операции с обновленными данными студента
     """
     connection = None
-    cursor = None
-    
     try:
         # Проверяем, что хотя бы одно поле для обновления передано
         if all(param is None for param in [full_name, class_number, group_id, tg_name]):
@@ -33,14 +30,8 @@ def edit_student(student_id, full_name=None, class_number=None, group_id=None, t
                 "error": "Класс должен быть 9, 10 или 11"
             }
         
-        # Подключаемся к базе данных
-        connection = mysql.connector.connect(
-            host=db.host,
-            port=db.port,
-            user=db.user,
-            password=db.password,
-            db=db.db
-        )
+        # Получаем подключение из пула
+        connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         # Проверяем существование студента
@@ -103,7 +94,7 @@ def edit_student(student_id, full_name=None, class_number=None, group_id=None, t
             }
         }
         
-    except mysql.connector.Error as e:
+    except Exception as e:
         if connection:
             connection.rollback()
         return {
@@ -111,17 +102,7 @@ def edit_student(student_id, full_name=None, class_number=None, group_id=None, t
             "error": f"Ошибка базы данных: {str(e)}"
         }
         
-    except Exception as e:
-        if connection:
-            connection.rollback()
-        return {
-            "status": False,
-            "error": f"Внутренняя ошибка сервера: {str(e)}"
-        }
-        
     finally:
-        if cursor:
-            cursor.close()
         if connection:
-            connection.close()
+            close_db_connection(connection)
 

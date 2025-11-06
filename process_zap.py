@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def process_zap(zap_id, status, answer, dates=None):
     """
@@ -15,16 +14,10 @@ def process_zap(zap_id, status, answer, dates=None):
     Returns:
         dict: Результат обработки
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor()
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
         # Получаем информацию о запросе
         cursor.execute("""
             SELECT id, student_id, status FROM zaps WHERE id = %s
@@ -76,10 +69,12 @@ def process_zap(zap_id, status, answer, dates=None):
             "message": "Запрос успешно обработан"
         }
 
-    except mysql.connector.Error as err:
-        connection.rollback()
+    except Exception as err:
+        if connection:
+            connection.rollback()
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

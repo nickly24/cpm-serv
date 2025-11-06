@@ -1,5 +1,4 @@
-import mysql.connector
-from db import db
+from db_pool import get_db_connection, close_db_connection
 
 def get_zaps_by_student(student_id):
     """
@@ -11,16 +10,10 @@ def get_zaps_by_student(student_id):
     Returns:
         dict: Список запросов
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         cursor.execute("""
             SELECT 
                 id,
@@ -40,11 +33,12 @@ def get_zaps_by_student(student_id):
             "zaps": zaps
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 def get_all_zaps(status=None):
     """
@@ -56,16 +50,10 @@ def get_all_zaps(status=None):
     Returns:
         dict: Список запросов с информацией о студентах
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         query = """
             SELECT 
                 z.id,
@@ -93,11 +81,12 @@ def get_all_zaps(status=None):
             "zaps": zaps
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 
 def get_zap_by_id(zap_id):
     """
@@ -109,16 +98,10 @@ def get_zap_by_id(zap_id):
     Returns:
         dict: Информация о запросе с изображениями
     """
-    connection = mysql.connector.connect(
-        host=db.host,
-        port=db.port,
-        user=db.user,
-        password=db.password,
-        db=db.db
-    )
-    cursor = connection.cursor(dictionary=True)
-
+    connection = None
     try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
         # Получаем информацию о запросе
         cursor.execute("""
             SELECT 
@@ -148,9 +131,10 @@ def get_zap_by_id(zap_id):
             "images": images
         }
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         return {"status": False, "error": str(err)}
 
     finally:
-        connection.close()
+        if connection:
+            close_db_connection(connection)
 

@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 class ScheduleManager:
     def __init__(self):
         self.client = pymongo.MongoClient(
-            'mongodb://gen_user:77tanufe@109.73.202.73:27017/default_db?authSource=admin&directConnection=true',
+            'mongodb://gen_user:I_OBNu~9oHF0(m@81.200.148.71:27017/default_db?authSource=admin&directConnection=true',
             serverSelectionTimeoutMS=5000,  # 5 секунд таймаут
             connectTimeoutMS=5000,         # 5 секунд на подключение
             socketTimeoutMS=5000,          # 5 секунд на операции

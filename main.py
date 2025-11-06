@@ -46,6 +46,16 @@ from create_zap import create_zap
 from get_zaps import get_zaps_by_student, get_all_zaps, get_zap_by_id
 from process_zap import process_zap
 import base64
+import logging
+import time
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app, resources={
@@ -61,6 +71,48 @@ CORS(app, resources={
         "expose_headers": ["Content-Type"]
     }
 })
+
+# Логирование всех запросов
+@app.before_request
+def log_request_info():
+    """Логирует информацию о входящем запросе"""
+    start_time = time.time()
+    request.start_time = start_time
+    
+    # Получаем IP клиента
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+    
+    # Логируем запрос
+    logger.info(f"[CPM-SERV REQUEST] {request.method} {request.path} | IP: {client_ip} | Query: {dict(request.args)}")
+    
+    # Логируем тело запроса для POST/PUT (первые 500 символов)
+    if request.method in ['POST', 'PUT'] and request.is_json:
+        try:
+            body = request.get_json()
+            body_str = str(body)[:500]
+            logger.info(f"[CPM-SERV REQUEST BODY] {body_str}")
+        except:
+            pass
+
+@app.after_request
+def log_response_info(response):
+    """Логирует информацию об ответе"""
+    # Вычисляем время выполнения
+    if hasattr(request, 'start_time'):
+        duration = (time.time() - request.start_time) * 1000  # в миллисекундах
+    else:
+        duration = 0
+    
+    # Логируем ответ
+    logger.info(f"[CPM-SERV RESPONSE] {request.method} {request.path} | Status: {response.status_code} | Duration: {duration:.2f}ms")
+    
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Логирует все исключения"""
+    logger.error(f"[CPM-SERV ERROR] {request.method} {request.path} | Exception: {str(e)}", exc_info=True)
+    return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 @app.route("/")
 def hello_world():

@@ -12,7 +12,7 @@ from jwt_auth import (
     get_current_user
 )
 from student_group_filter import get_student_ids_and_names_by_group
-from get_homeworks import get_homeworks
+from get_homeworks import get_homeworks, get_homeworks_paginated
 from get_homework_sessions_bygroupid import get_proctor_homework_sessions
 import datetime
 from pass_homework import pass_homework
@@ -215,6 +215,14 @@ def student_group_filter(current_user=None):
 
 @app.route("/api/get-homeworks")
 def gethomeworks():
+    # Пагинация и фильтр по типу (направлению): ?page=1&limit=20&type=ОВ
+    page = request.args.get('page', type=int, default=1)
+    limit = request.args.get('limit', type=int, default=50)
+    homework_type = request.args.get('type', default=None)
+    if page is not None or limit is not None or homework_type:
+        limit = min(max(1, limit or 50), 100)
+        page = max(1, page or 1)
+        return jsonify(get_homeworks_paginated(page=page, limit=limit, homework_type=homework_type))
     return jsonify(get_homeworks())
 
 @app.route("/api/get-homework-sessions", methods=['POST'])
@@ -261,9 +269,22 @@ def pass_hw(current_user=None):
 @app.route("/api/get-homeworks-student", methods=['POST'])
 @require_self_or_role('studentId', 'proctor')
 def ghst(current_user=None):
-    data = request.get_json()
-    student_id = data.get('studentId') 
-    answer = get_student_homework_dashboard(student_id)
+    data = request.get_json() or {}
+    student_id = data.get('studentId')
+    # Обратная совместимость: если клиент не передаёт page/limit (супервайзер, старый код),
+    # отдаём все домашки (limit=500). Если передаёт — пагинация.
+    use_pagination = 'page' in data or 'limit' in data
+    page = data.get('page', 1)
+    limit = data.get('limit', 500 if not use_pagination else 20)
+    homework_type = data.get('homework_type') or data.get('type')
+    try:
+        page = int(page) if page is not None else 1
+        limit = int(limit) if limit is not None else (500 if not use_pagination else 20)
+        limit = min(max(1, limit), 500)
+        page = max(1, page)
+    except (TypeError, ValueError):
+        page, limit = 1, (500 if not use_pagination else 20)
+    answer = get_student_homework_dashboard(student_id, page=page, limit=limit, homework_type=homework_type or None)
     return jsonify(answer)
 
 @app.route("/api/get-all-homework-results", methods=['GET'])
